@@ -1,8 +1,14 @@
 #include <stdio.h>
+#include "duckchat.h"
+#include <sys/socket.h> // Core BSD socket functions and data structures
+#include <netinet/in.h> //AF_INET and AF_INET6 address families
+#include <sys/un.h> //AF_UNIX address family. Used for local communication between programs running on the same computer
+#include <arpa/inet.h> //Functions for manipulating numeric IP addresses.
+#include <netdb.h> //Functions for translating protocol names and host names into numeric addresses
 
 const int DEBUG = 5;
 
-void debug (char *msg, int priority)
+void debug (const char *msg, int priority)
 {
   int i;
   if (priority <= DEBUG) {
@@ -11,7 +17,7 @@ void debug (char *msg, int priority)
   }
 }
 
-void debugn(char *msg, int n, int priority)
+void debugn(const char *msg, int n, int priority)
 {
   int i;
   if (priority <= DEBUG){
@@ -21,8 +27,37 @@ void debugn(char *msg, int n, int priority)
 }
 
 int main(int argc, char *argv[]) {
+  char* host_name;
+  char* host_port;
+  char* username;
+  char* active_channel;
+  int h_socket,err;
+  struct sockaddr_un server;
   //takes three command line arguments
    //server_host_name server_listening_port_number username
+
+   if (argc != 4)
+     perror("wrong number of arguments");
+   else if (sizeof(argv[3]) > USERNAME_MAX)
+    perror("Username too long");
+   else{
+     host_name = argv[1];
+     host_port = argv[2];
+     username = argv[3];
+
+     fprintf(stderr, "%s logging in on port %s", username,host_port);
+
+     //create the socket
+    h_socket = socket(PF_UNIX,SOCK_DGRAM,0);
+
+    //create the server structure
+    server.sun_family = AF_UNIX;
+    strcpy(server.sun_path, host_name);
+
+    //connect/bind to the server, something
+    err = connect(h_socket, &server, sizeof server);
+
+   }
 
    //on startup
    //client automatically connects to chat server
