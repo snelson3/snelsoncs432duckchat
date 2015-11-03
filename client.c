@@ -7,8 +7,9 @@
 #include <netdb.h> //Functions for translating protocol names and host names into numeric addresses
 #include <stdlib.h>
 
-const int DEBUG = 5;
+const int DEBUG = 8;
 char* active_channel;
+char* username;
 
 void myError(const char *msg)
 {
@@ -34,7 +35,7 @@ void debugn(const char *msg, int n, int priority)
   }
 }
 
-int join(int socket, const char *channel)
+int sendJoin(int socket, const char *channel)
 {
   int err;
   struct request_join p_join;
@@ -46,11 +47,60 @@ int join(int socket, const char *channel)
   return err;
 }
 
+int sendLogout(int socket)
+{
+  debug("EVENTUALLY WILL SEND LOGOUT REQUEST",1);
+  return 0;
+}
+
+int sendLeave(int socket, const char *channel)
+{
+  debug("EVENTUALLY WILL SEND LEAVE REQUEST",1);
+  return 0;
+}
+
+int sendSay(int socket, const char *channel, const char *msg)
+{
+  debug("EVENTUALLY WILL SEND SAY REQUEST",1);
+  return 0;
+}
+
+int sendList(int socket)
+{
+  debug("EVENTUALLY WILL SEND LIST REQUEST",1);
+  return 0;
+}
+
+int sendWho(int socket, const char *channel)
+{
+  debug("EVENTUALLY WILL SEND A WHO REQUEST",1);
+  return 0;
+}
+
+int switchActive(const char*channel)
+{
+  debug("EVENTUALLY WILL SWITCH ACTIVE CHANNEL",1);
+  return 0;
+}
+
+int parseCommand(int socket, const char*command)
+{
+  debug("printing command",7);
+  debug(command,7);
+
+  char *pC;
+  pC = strtok((char *)command," ");
+  debug(pC,4);
+  debug("done toking command",7);
+  return 0;
+}
+
+
 int main(int argc, char *argv[]) {
   const char* host_name;
   char* host_port;
-  char* username;
   int h_socket,err;
+  bool connected = false;
   struct sockaddr_in server;
   //takes three command line arguments
    //server_host_name server_listening_port_number username
@@ -81,8 +131,10 @@ int main(int argc, char *argv[]) {
     err = connect(h_socket, (struct sockaddr*) &server, sizeof server);
     if (err < 0)
       myError("ERROR running connect()");
-    else
+    else{
       debug("Connection successful",1);
+      connected = true;
+    }
 
     //now I create a login packet, and send it
     struct request_login p_login;
@@ -93,7 +145,7 @@ int main(int argc, char *argv[]) {
     if (err < 0) myError("Error sending login packet");
 
     //join channel Common
-    err = join(h_socket, "Common");
+    err = sendJoin(h_socket, "Common");
     if (err < 0) myError("Error joining channel Common");
 
     //
@@ -107,11 +159,32 @@ int main(int argc, char *argv[]) {
     //
     //
 
-   }
 
-   //on startup
-   //client automatically connects to chat server
-   //joins channel "Common"
+    while (connected){
+          char user_in[SAY_MAX];
+          //then it loops through providing the user a prompt
+          scanf("%s", user_in);
+          //after user hits enter
+          debug(user_in,5);
+          //if first character is /, parse the command
+          fprintf(stderr,"%c",user_in[0]);
+          const char*c = &user_in[0];
+          fprintf(stderr,"thing\n%s\n",c);
+          if (strncmp(user_in,"/",1)==0)
+          {
+              debug("It's a command!",8);
+              parseCommand(h_socket,user_in);
+          }
+          else
+          //otherwise call say(user_in)
+          {
+            debug("Saying a thing",8);
+            sendSay(h_socket,active_channel,user_in);
+          }
+    };
+
+  //  close(h_socket) do I have to do this?
+   }
 
    //then it loops through providing the user a prompt
     //when user hits enter

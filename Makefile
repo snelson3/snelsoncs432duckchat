@@ -1,7 +1,7 @@
 CC=g++
 
 CFLAGS=-Wall -W -g -Werror
-CFLAGS=-Wall -W -g
+CFLAGS=-Wall -W -g -Wno-unused
 
 
 all: client server
