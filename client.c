@@ -27,10 +27,9 @@ void debugn(const char *msg, int n, int priority)
 }
 
 int main(int argc, char *argv[]) {
-  char* host_name;
+  const char* host_name;
   char* host_port;
   char* username;
-  char* active_channel;
   int h_socket,err;
   struct sockaddr_in server;
   //takes three command line arguments
@@ -41,7 +40,10 @@ int main(int argc, char *argv[]) {
    else if (sizeof(argv[3]) > USERNAME_MAX)
     perror("Username too long");
    else{
-     host_name = argv[1];
+     if (strcmp("localhost",argv[1]) == 0)
+        host_name = LOCALHOST;
+     else
+        host_name = argv[1];
      host_port = argv[2];
      username = argv[3];
 
@@ -53,15 +55,31 @@ int main(int argc, char *argv[]) {
     //create the server structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(host_name);
-    server.sin_port = htons(1234);
+    server.sin_port = 1234;
 
-    //connect/bind to the server, something
+    //connect to the server
     err = connect(h_socket, (struct sockaddr*) &server, sizeof server);
     if (err < 0)
       perror("ERROR running connect()");
     else
       debug("Connection successful",1);
 
+    //now I create a login packet, and send it
+    struct request_login p_login;
+    p_login.req_type = 0;
+    strcpy(p_login.req_username,username);
+
+    send(h_socket, p_login, sizeof p_login, 0);
+
+    //Wait for a response packet
+
+    char buffer[64];
+    recv(h_socket,buffer,sizeof buffer, 0);
+
+    debug(buffer,2);
+
+
+    //make active channel Common
    }
 
    //on startup

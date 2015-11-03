@@ -1,6 +1,8 @@
 #ifndef DUCKCHAT_H
 #define DUCKCHAT_H
 
+#define LOCALHOST "127.0.0.1"
+
 /* Path names to unix domain sockets should not be longer than this */
 #ifndef UNIX_PATH_MAX
 #define UNIX_PATH_MAX 108
@@ -57,17 +59,17 @@ struct request_logout {
 
 struct request_join {
         request_t req_type; /* = REQ_JOIN */
-        char req_channel[CHANNEL_MAX]; 
+        char req_channel[CHANNEL_MAX];
 } packed;
 
 struct request_leave {
         request_t req_type; /* = REQ_LEAVE */
-        char req_channel[CHANNEL_MAX]; 
+        char req_channel[CHANNEL_MAX];
 } packed;
 
 struct request_say {
         request_t req_type; /* = REQ_SAY */
-        char req_channel[CHANNEL_MAX]; 
+        char req_channel[CHANNEL_MAX];
         char req_text[SAY_MAX];
 } packed;
 
@@ -77,7 +79,7 @@ struct request_list {
 
 struct request_who {
         request_t req_type; /* = REQ_WHO */
-        char req_channel[CHANNEL_MAX]; 
+        char req_channel[CHANNEL_MAX];
 } packed;
 
 struct request_keep_alive {
