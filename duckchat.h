@@ -2,11 +2,13 @@
 #define DUCKCHAT_H
 
 #define LOCALHOST "127.0.0.1"
+#define PACKET_MAX 132
 
 /* Path names to unix domain sockets should not be longer than this */
 #ifndef UNIX_PATH_MAX
 #define UNIX_PATH_MAX 108
 #endif
+
 
 /* This tells gcc to "pack" the structure.  Normally, gcc will
  * inserting padding into a structure if it feels it is convenient.

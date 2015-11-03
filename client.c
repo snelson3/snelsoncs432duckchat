@@ -5,8 +5,16 @@
 #include <sys/un.h> //AF_UNIX address family. Used for local communication between programs running on the same computer
 #include <arpa/inet.h> //Functions for manipulating numeric IP addresses.
 #include <netdb.h> //Functions for translating protocol names and host names into numeric addresses
+#include <stdlib.h>
 
 const int DEBUG = 5;
+char* active_channel;
+
+void myError(const char *msg)
+{
+  perror(msg);
+  exit(-1);
+}
 
 void debug (const char *msg, int priority)
 {
@@ -24,6 +32,18 @@ void debugn(const char *msg, int n, int priority)
     for (i = 0; i < priority; i++) fprintf(stderr, " ");
     fprintf(stderr, "%s%d\n",msg,n);
   }
+}
+
+int join(int socket, const char *channel)
+{
+  int err;
+  struct request_join p_join;
+  p_join.req_type = REQ_JOIN;
+  strcpy(p_join.req_channel,channel);
+  err = send(socket, &p_join, sizeof p_join,0);
+  if (err < 0) { return err; }
+  active_channel = (char *) channel;
+  return err;
 }
 
 int main(int argc, char *argv[]) {
@@ -55,31 +75,38 @@ int main(int argc, char *argv[]) {
     //create the server structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(host_name);
-    server.sin_port = 1234;
+    server.sin_port = htons(8546);
 
     //connect to the server
     err = connect(h_socket, (struct sockaddr*) &server, sizeof server);
     if (err < 0)
-      perror("ERROR running connect()");
+      myError("ERROR running connect()");
     else
       debug("Connection successful",1);
 
     //now I create a login packet, and send it
     struct request_login p_login;
-    p_login.req_type = 0;
+    p_login.req_type = REQ_LOGIN;
     strcpy(p_login.req_username,username);
 
-    send(h_socket, p_login, sizeof p_login, 0);
+    err = send(h_socket, &p_login, sizeof p_login, 0);
+    if (err < 0) myError("Error sending login packet");
 
-    //Wait for a response packet
+    //join channel Common
+    err = join(h_socket, "Common");
+    if (err < 0) myError("Error joining channel Common");
 
-    char buffer[64];
-    recv(h_socket,buffer,sizeof buffer, 0);
+    //
+    // //Wait for a response packet
+    // char buffer[128];
+    // recv(h_socket,buffer,sizeof buffer, 0);
+    //
+    // //Now that I have a response packet, create a txt structure to look at the type
+    // struct text login_r;
+    // login_r.txt_type = buffer[0];
+    //
+    //
 
-    debug(buffer,2);
-
-
-    //make active channel Common
    }
 
    //on startup
