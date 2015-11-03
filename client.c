@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
   char* username;
   char* active_channel;
   int h_socket,err;
-  struct sockaddr_un server;
+  struct sockaddr_in server;
   //takes three command line arguments
    //server_host_name server_listening_port_number username
 
@@ -45,17 +45,22 @@ int main(int argc, char *argv[]) {
      host_port = argv[2];
      username = argv[3];
 
-     fprintf(stderr, "%s logging in on port %s", username,host_port);
+     fprintf(stderr, "%s logging in on port %s\n", username,host_port);
 
      //create the socket
-    h_socket = socket(PF_UNIX,SOCK_DGRAM,0);
+    h_socket = socket(PF_INET,SOCK_DGRAM,0);
 
     //create the server structure
-    server.sun_family = AF_UNIX;
-    strcpy(server.sun_path, host_name);
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr(host_name);
+    server.sin_port = htons(1234);
 
     //connect/bind to the server, something
-    err = connect(h_socket, &server, sizeof server);
+    err = connect(h_socket, (struct sockaddr*) &server, sizeof server);
+    if (err < 0)
+      perror("ERROR running connect()");
+    else
+      debug("Connection successful",1);
 
    }
 
