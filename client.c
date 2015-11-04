@@ -9,6 +9,10 @@
 #include "raw.h"
 #include <iostream>
 #include <string>
+#include <math.h>
+#include <termios.h>
+#include <unistd.h>
+#include <sys/types.h>
 //#include "raw.c"
 
 const int DEBUG = 4;
@@ -48,7 +52,6 @@ int sendJoin(int socket, const char *channel)
   err = send(socket, &p_join, sizeof p_join,0);
   if (err < 0) { return err; }
   strcpy(active_channel,channel);
-  //active_channel = channel;
   return err;
 }
 
@@ -186,6 +189,25 @@ int parseCommand(int socket, const char*command)
   return 0;
 }
 
+int reportSay(text_say *s_packet)
+{
+  fprintf(stderr,"[%s][%s]: %s",s_packet->txt_channel,s_packet->txt_username,s_packet->txt_text);
+  return 0;
+}
+
+int parseServerPacket(int socket)
+{
+  struct text u_packet[PACKET_MAX];
+  recv(socket,u_packet,sizeof u_packet, 0);
+  if (u_packet->txt_type == 0)
+  {
+    //struct text_say *s_packet = (text_say *) u_packet;
+    reportSay((text_say *)u_packet);
+  }
+  else perror("Incorrect txt_type, nothing but say implemented\n");
+  return 0;
+}
+
 
 int main(int argc, char *argv[]) {
   const char* host_name;
@@ -254,27 +276,47 @@ int main(int argc, char *argv[]) {
     //raw_mode();
     //atexit(cooked_mode);
 
+    fd_set readfds;
+    FD_ZERO(&readfds);
+
+    FD_SET(h_socket,&readfds);
+    FD_SET(STDIN_FILENO,&readfds);
+    int n = fmax(STDIN_FILENO,h_socket)+1;
+    int r;
     while (connected){
           char user_in[SAY_MAX+1];
           char *p_user_in = new char[SAY_MAX];
           //then it loops through providing the user a promp
 
-          fgets(user_in,SAY_MAX,stdin);
-
-          //get rid of the trailing newline
-          p_user_in = strtok(user_in,"\n");
-
-          if (strncmp(user_in,"/",1)==0)
+          r = select(n, &readfds,NULL,NULL,0);
+          if (r > 0)
           {
-              debug("It's a command!",8);
-              int i = parseCommand(h_socket,user_in);
-              if (i == 1) { connected = 0;}
-          }
-          else
-          //otherwise call say(user_in)
-          {
-            debug("Saying a thing",8);
-            sendSay(h_socket,user_in);
+            if (FD_ISSET(STDIN_FILENO,&readfds)){
+              fprintf(stderr,"ready to read input\n");
+              fgets(user_in,SAY_MAX,stdin);
+
+              //get rid of the trailing newline
+              p_user_in = strtok(user_in,"\n");
+
+              if (strncmp(user_in,"/",1)==0)
+              {
+                  debug("It's a command!",8);
+                  int i = parseCommand(h_socket,user_in);
+                  if (i == 1) { connected = 0;}
+              }
+              else
+              //otherwise call say(user_in)
+              {
+                debug("Saying a thing",8);
+                sendSay(h_socket,user_in);
+              }
+            }
+            if (FD_ISSET(h_socket,&readfds))
+            {
+              //a packet was sent from the server, parse it
+              fprintf(stderr,"a packet incoming\n");
+              parseServerPacket(h_socket);
+            }
           }
 
         //  delete[] p_user_in;
