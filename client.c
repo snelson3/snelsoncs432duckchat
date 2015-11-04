@@ -74,7 +74,6 @@ int sendSay(int socket, const char *msg)
   int err;
   struct request_say p_say;
   p_say.req_type = REQ_SAY;
-  fprintf(stderr,"to %s\n",active_channel);
   strcpy(p_say.req_channel,active_channel);
   strcpy(p_say.req_text,msg);
   err = send(socket, &p_say, sizeof p_say, 0);
@@ -329,7 +328,6 @@ int main(int argc, char *argv[]) {
 
           select(n, &readfds,NULL,NULL,0);
             if (FD_ISSET(STDIN_FILENO,&readfds)){
-              fprintf(stderr,"ready to read input\n");
               fgets(user_in,SAY_MAX,stdin);
 
               //get rid of the trailing newline
@@ -350,8 +348,7 @@ int main(int argc, char *argv[]) {
 
             if (FD_ISSET(h_socket,&readfds))
             {
-              //a packet was sent from the server, parse it
-              fprintf(stderr,"a packet incoming\n");
+              //a packet was sent from the server, parse itf
               parseServerPacket(h_socket);
               FD_CLR(STDIN_FILENO,&readfds);
             }
