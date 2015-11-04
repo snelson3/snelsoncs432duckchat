@@ -99,19 +99,77 @@ int sendSay(int socket, const char *msg)
 
 int sendList(int socket)
 {
-  debug("EVENTUALLY WILL SEND LIST REQUEST",1);
+  int err;
+  struct request_list p_list;
+  p_list.req_type = REQ_LIST;
+
+  err = send(socket, &p_list, sizeof p_list, 0);
+  if (err < 0) myError("Error sending list packet");
+
+  struct text_list l_packet[9999];
+  recv(socket,l_packet,sizeof l_packet, 0);
+  fprintf(stderr,"Existing channels:\n");
+
+  for (int i = 0; i < l_packet->txt_nchannels;i++){
+    fprintf(stderr,"%s\n",l_packet->txt_channels[i].ch_channel);
+  }
+
   return 0;
 }
 
 int sendWho(int socket, const char *channel)
 {
-  debug("EVENTUALLY WILL SEND A WHO REQUEST",1);
+  int err;
+  struct request_who p_who;
+  p_who.req_type = REQ_WHO;
+  strcpy(p_who.req_channel,channel);
+  err = send(socket, &p_who, sizeof p_who,0);
+  if (err < 0) { myError("Error sending who packet"); }
+
+  struct text_who w_packet[9999];
+  recv(socket,w_packet,sizeof w_packet, 0);
+  fprintf(stderr,"Users on channel %s\n", channel);
+
+  for (int i = 0; i < w_packet->txt_nusernames;i++){
+    fprintf(stderr,"%s\n",w_packet->txt_users[i].us_username);
+  }
   return 0;
 }
 
 int switchActive(int socket, const char*channel)
 {
-  debug("EVENTUALLY WILL SWITCH ACTIVE CHANNEL",1);
+  //get a list of the users in that channel, and see if it matches this user.
+  int err;
+  struct request_who p_who;
+  p_who.req_type = REQ_WHO;
+  strcpy(p_who.req_channel,channel);
+  err = send(socket, &p_who, sizeof p_who, 0);
+  if (err < 0) { myError("Error sending who packet");}
+
+  struct text_who w_packet[9999];
+  recv(socket,w_packet,sizeof w_packet,0);
+
+  bool user_in_channel = false;
+
+  fprintf(stderr,"AND SEG FAULT");
+
+  for (int i = 0; i < w_packet->txt_nusernames; i++) {
+    if (strcmp(username, w_packet->txt_users[i].us_username)==0)
+    {
+      user_in_channel = true;
+    }
+  }
+
+  if (user_in_channel)
+  {
+    //can switch active channel
+    strcpy(active_channel,channel);
+  }
+  else
+  {
+    fprintf(stderr, "Can't switch to channel not joined\n");
+  }
+
   return 0;
 }
 
@@ -199,12 +257,16 @@ int parseServerPacket(int socket)
 {
   struct text u_packet[PACKET_MAX];
   recv(socket,u_packet,sizeof u_packet, 0);
-  if (u_packet->txt_type == 0)
+  if (u_packet->txt_type == TXT_SAY)
   {
     //struct text_say *s_packet = (text_say *) u_packet;
     reportSay((text_say *)u_packet);
   }
-  else perror("Incorrect txt_type, nothing but say implemented\n");
+  else if (u_packet->txt_type == TXT_LIST)
+  {
+    //I don't know how to implement this memory wise
+  }
+  else perror("Incorrect txt_type\n");
   return 0;
 }
 
