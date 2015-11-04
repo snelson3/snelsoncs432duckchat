@@ -6,8 +6,12 @@
 #include <arpa/inet.h> //Functions for manipulating numeric IP addresses.
 #include <netdb.h> //Functions for translating protocol names and host names into numeric addresses
 #include <stdlib.h>
+#include "raw.h"
+#include <iostream>
+#include <string>
+//#include "raw.c"
 
-const int DEBUG = 8;
+const int DEBUG = 4;
 char* active_channel;
 char* username;
 
@@ -49,19 +53,33 @@ int sendJoin(int socket, const char *channel)
 
 int sendLogout(int socket)
 {
-  debug("EVENTUALLY WILL SEND LOGOUT REQUEST",1);
+  int err;
+  //now I create a logout packet, and send it
+  struct request_logout p_logout;
+  p_logout.req_type = REQ_LOGOUT;
+
+  err = send(socket, &p_logout, sizeof p_logout, 0);
+  if (err < 0) myError("Error sending logout packet");
   return 0;
 }
 
 int sendLeave(int socket, const char *channel)
 {
-  debug("EVENTUALLY WILL SEND LEAVE REQUEST",1);
+  int err;
+  struct request_leave p_leave;
+  p_leave.req_type = REQ_LEAVE;
+  strcpy(p_leave.req_channel,channel);
+  err = send(socket, &p_leave, sizeof p_leave,0);
+  if (err < 0) { myError("Error sending leave packet"); }
+  if (strcmp(channel,active_channel)==0)
+    {active_channel = NULL;}
   return 0;
 }
 
 int sendSay(int socket, const char *channel, const char *msg)
 {
   debug("EVENTUALLY WILL SEND SAY REQUEST",1);
+  //check if active channel
   return 0;
 }
 
@@ -77,7 +95,7 @@ int sendWho(int socket, const char *channel)
   return 0;
 }
 
-int switchActive(const char*channel)
+int switchActive(int socket, const char*channel)
 {
   debug("EVENTUALLY WILL SWITCH ACTIVE CHANNEL",1);
   return 0;
@@ -85,13 +103,75 @@ int switchActive(const char*channel)
 
 int parseCommand(int socket, const char*command)
 {
-  debug("printing command",7);
-  debug(command,7);
-
   char *pC;
   pC = strtok((char *)command," ");
-  debug(pC,4);
-  debug("done toking command",7);
+
+  if (strcmp(pC,"/exit")==0)
+  {
+    //logout request
+    sendLogout(socket);
+    return 1;
+  }
+  else if (strcmp(pC, "/join")==0)
+  {
+    //join request
+    pC = strtok(NULL, " ");
+    if (pC != NULL)
+    {
+     sendJoin(socket,pC);
+    }
+    else
+    {
+      fprintf(stderr,"No channel specified!\n");
+    }
+  }
+  else if (strcmp(pC, "/leave")==0)
+  {
+    //leave request
+    pC = strtok(NULL, " ");
+    if (pC != NULL)
+    {
+     sendLeave(socket,pC);
+    }
+    else
+    {
+      fprintf(stderr,"No channel specified!\n");
+    }
+  }
+  else if (strcmp(pC, "/list")==0)
+  {
+    //list request
+    sendList(socket);
+  }
+  else if (strcmp(pC,"/who")==0)
+  {
+    //who request
+    pC = strtok(NULL, " ");
+    if (pC != NULL)
+    {
+     sendWho(socket,pC);
+    }
+    else
+    {
+      fprintf(stderr,"No channel specified!\n");
+    }
+  }
+  else if (strcmp(pC, "/switch")==0)
+  {
+    //switch active channels
+    pC = strtok(NULL, " ");
+    if (pC != NULL)
+    {
+     switchActive(socket,pC);
+    }
+    else
+    {
+      fprintf(stderr,"No channel specified!\n");
+    }
+  }
+  else{
+    fprintf(stderr,"Bad Command\n");
+  }
   return 0;
 }
 
@@ -159,21 +239,25 @@ int main(int argc, char *argv[]) {
     //
     //
 
+    //I don't think this is strictly neccessary, less important than other things
+    //raw_mode();
+    //atexit(cooked_mode);
 
     while (connected){
-          char user_in[SAY_MAX];
-          //then it loops through providing the user a prompt
-          scanf("%s", user_in);
-          //after user hits enter
-          debug(user_in,5);
-          //if first character is /, parse the command
-          fprintf(stderr,"%c",user_in[0]);
-          const char*c = &user_in[0];
-          fprintf(stderr,"thing\n%s\n",c);
+          char user_in[SAY_MAX+1];
+          char *p_user_in;
+          //then it loops through providing the user a promp
+
+          fgets(user_in,SAY_MAX,stdin);
+
+          //get rid of the trailing newline
+          p_user_in = strtok(user_in,"\n");
+
           if (strncmp(user_in,"/",1)==0)
           {
               debug("It's a command!",8);
-              parseCommand(h_socket,user_in);
+              int i = parseCommand(h_socket,user_in);
+              if (i == 1) { connected = 0;}
           }
           else
           //otherwise call say(user_in)
