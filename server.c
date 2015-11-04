@@ -22,9 +22,10 @@ void myError(const char *msg)
 
 int main(int argc, char *argv[]) {
   const char *host_name;
-  int host_port;
+  int host_port, addrlen;
   int my_socket;
-  struct sockaddr_in my_server;
+  char msg[50];
+  struct sockaddr_in my_server, client_addr;
     //server takes two arguments
         //host_address port_number
     if (argc!=3)
@@ -44,7 +45,9 @@ int main(int argc, char *argv[]) {
 
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
 
+    recvfrom(my_socket,msg,11,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
 
+    fprintf(stderr,"printed\n");
 
     //binds to an ip address, if localhost 127.0.0.1
 
