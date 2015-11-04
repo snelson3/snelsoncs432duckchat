@@ -25,6 +25,12 @@ void myError(const char *msg)
   exit(-1);
 }
 
+int reportError(text_error *e_packet)
+{
+  fprintf(stderr,"Error: %s\n",e_packet->txt_error);
+  return 0;
+}
+
 void debug (const char *msg, int priority)
 {
   int i;
@@ -51,7 +57,9 @@ int sendJoin(int socket, const char *channel)
   strcpy(p_join.req_channel,channel);
   err = send(socket, &p_join, sizeof p_join,0);
   if (err < 0) { return err; }
+  fprintf(stderr,"AND I WAS RIGHT");
   strcpy(active_channel,channel);
+  fprintf(stderr,"NO I WAS WRONG");
   return err;
 }
 
@@ -76,13 +84,13 @@ int sendLeave(int socket, const char *channel)
   err = send(socket, &p_leave, sizeof p_leave,0);
   if (err < 0) { myError("Error sending leave packet"); }
   if (strcmp(channel,active_channel)==0)
-    {active_channel = NULL;}
+    {strcpy(active_channel,"");}
   return 0;
 }
 
 int sendSay(int socket, const char *msg)
 {
-  if (active_channel == NULL){
+  if (strcmp(active_channel,"")==0){
     fprintf(stderr,"No active channel, can't send message\n");
     return 0;
   }
@@ -108,12 +116,16 @@ int sendList(int socket)
 
   struct text_list l_packet[9999];
   recv(socket,l_packet,sizeof l_packet, 0);
-  fprintf(stderr,"Existing channels:\n");
-
-  for (int i = 0; i < l_packet->txt_nchannels;i++){
-    fprintf(stderr,"%s\n",l_packet->txt_channels[i].ch_channel);
+  if (l_packet->txt_type == TXT_ERROR){
+    reportError((text_error *)l_packet);
   }
+  else{
+    fprintf(stderr,"Existing channels:\n");
 
+    for (int i = 0; i < l_packet->txt_nchannels;i++){
+      fprintf(stderr,"%s\n",l_packet->txt_channels[i].ch_channel);
+    }
+  }
   return 0;
 }
 
@@ -128,11 +140,16 @@ int sendWho(int socket, const char *channel)
 
   struct text_who w_packet[9999];
   recv(socket,w_packet,sizeof w_packet, 0);
-  fprintf(stderr,"Users on channel %s\n", channel);
+  if (w_packet->txt_type == TXT_ERROR)
+  {
+    reportError((text_error *)w_packet);
+  }
+  else
+  {fprintf(stderr,"Users on channel %s\n", channel);
 
   for (int i = 0; i < w_packet->txt_nusernames;i++){
     fprintf(stderr,"%s\n",w_packet->txt_users[i].us_username);
-  }
+  }}
   return 0;
 }
 
@@ -148,28 +165,31 @@ int switchActive(int socket, const char*channel)
 
   struct text_who w_packet[9999];
   recv(socket,w_packet,sizeof w_packet,0);
-
-  bool user_in_channel = false;
-
-  fprintf(stderr,"AND SEG FAULT");
-
-  for (int i = 0; i < w_packet->txt_nusernames; i++) {
-    if (strcmp(username, w_packet->txt_users[i].us_username)==0)
-    {
-      user_in_channel = true;
-    }
-  }
-
-  if (user_in_channel)
-  {
-    //can switch active channel
-    strcpy(active_channel,channel);
+  if (w_packet->txt_type == TXT_ERROR){
+    reportError((text_error *)w_packet);
   }
   else
-  {
-    fprintf(stderr, "Can't switch to channel not joined\n");
-  }
 
+{    bool user_in_channel = false;
+
+
+    for (int i = 0; i < w_packet->txt_nusernames; i++) {
+      if (strcmp(username, w_packet->txt_users[i].us_username)==0)
+      {
+        user_in_channel = true;
+      }
+    }
+
+    if (user_in_channel)
+    {
+      //can switch active channel
+      strcpy(active_channel,channel);
+    }
+    else
+    {
+      fprintf(stderr, "Can't switch to channel not joined\n");
+    }
+}
   return 0;
 }
 
@@ -253,6 +273,8 @@ int reportSay(text_say *s_packet)
   return 0;
 }
 
+
+
 int parseServerPacket(int socket)
 {
   struct text u_packet[PACKET_MAX];
@@ -262,9 +284,9 @@ int parseServerPacket(int socket)
     //struct text_say *s_packet = (text_say *) u_packet;
     reportSay((text_say *)u_packet);
   }
-  else if (u_packet->txt_type == TXT_LIST)
+  else if (u_packet->txt_type == TXT_ERROR)
   {
-    //I don't know how to implement this memory wise
+    reportError((text_error *)u_packet);
   }
   else perror("Incorrect txt_type\n");
   return 0;

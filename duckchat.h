@@ -3,6 +3,7 @@
 
 #define LOCALHOST "127.0.0.1"
 #define PACKET_MAX 132
+#define EMPTYROOM ""
 
 /* Path names to unix domain sockets should not be longer than this */
 #ifndef UNIX_PATH_MAX
