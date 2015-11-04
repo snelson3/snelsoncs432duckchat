@@ -6,27 +6,22 @@
 #include <arpa/inet.h> //Functions for manipulating numeric IP addresses.
 #include <netdb.h> //Functions for translating protocol names and host names into numeric addresses
 
-const int DEBUG = 5;
-
-void debug (char *msg, int priority)
-{
-  int i;
-  if (priority <= DEBUG) {
-    for (i = 0; i < priority; i++) fprintf(stderr," ");
-    fprintf(stderr, "%s\n",msg);
-  }
-}
-
-void debugn(char *msg, int n, int priority)
-{
-  int i;
-  if (priority <= DEBUG){
-    for (i = 0; i < priority; i++) fprintf(stderr, " ");
-    fprintf(stderr, "%s%d\n",msg,n);
-  }
-}
 
 int main(int argc, char *argv[]) {
-   perror("hi");
-   fprintf(stderr,"%d",USERNAME_MAX);
+    //server takes two arguments
+        //host_address port_number
+
+    //binds to an ip address, if localhost 127.0.0.1
+
+    //output debugging whenever receiving message from client
+      //[channel][user][message]
+
+    //server delivers messages from a user X to all users on X's active channel
+         //must keep track of individual users and channels theyve subbed to
+         //also must track each channel and subbed users on it
+
+    //whenever a channel has no users, it's deleted
+    //whenever a user joins a nonexistent channel, it's created
+
+    //if server receives message from someone not logged in, ignore.
 }
