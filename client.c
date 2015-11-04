@@ -12,8 +12,8 @@
 //#include "raw.c"
 
 const int DEBUG = 4;
-char* active_channel;
-char* username;
+char *active_channel = new char[CHANNEL_MAX];
+char* username = new char[USERNAME_MAX];
 
 void myError(const char *msg)
 {
@@ -47,7 +47,8 @@ int sendJoin(int socket, const char *channel)
   strcpy(p_join.req_channel,channel);
   err = send(socket, &p_join, sizeof p_join,0);
   if (err < 0) { return err; }
-  active_channel = (char *) channel;
+  strcpy(active_channel,channel);
+  //active_channel = channel;
   return err;
 }
 
@@ -76,10 +77,20 @@ int sendLeave(int socket, const char *channel)
   return 0;
 }
 
-int sendSay(int socket, const char *channel, const char *msg)
+int sendSay(int socket, const char *msg)
 {
-  debug("EVENTUALLY WILL SEND SAY REQUEST",1);
-  //check if active channel
+  if (active_channel == NULL){
+    fprintf(stderr,"No active channel, can't send message\n");
+    return 0;
+  }
+  int err;
+  struct request_say p_say;
+  p_say.req_type = REQ_SAY;
+  fprintf(stderr,"to %s\n",active_channel);
+  strcpy(p_say.req_channel,active_channel);
+  strcpy(p_say.req_text,msg);
+  err = send(socket, &p_say, sizeof p_say, 0);
+  if (err < 0) { myError("Error sending say message"); }
   return 0;
 }
 
@@ -205,7 +216,7 @@ int main(int argc, char *argv[]) {
     //create the server structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(host_name);
-    server.sin_port = htons(8546);
+    server.sin_port = htons(8546); //THIS ABOSLUTELY NEEDS TO BE FIXED BEFORE SUBMITTING
 
     //connect to the server
     err = connect(h_socket, (struct sockaddr*) &server, sizeof server);
@@ -245,7 +256,7 @@ int main(int argc, char *argv[]) {
 
     while (connected){
           char user_in[SAY_MAX+1];
-          char *p_user_in;
+          char *p_user_in = new char[SAY_MAX];
           //then it loops through providing the user a promp
 
           fgets(user_in,SAY_MAX,stdin);
@@ -263,8 +274,10 @@ int main(int argc, char *argv[]) {
           //otherwise call say(user_in)
           {
             debug("Saying a thing",8);
-            sendSay(h_socket,active_channel,user_in);
+            sendSay(h_socket,user_in);
           }
+
+        //  delete[] p_user_in;
     };
 
   //  close(h_socket) do I have to do this?
