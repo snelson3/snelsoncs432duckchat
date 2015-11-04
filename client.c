@@ -191,7 +191,7 @@ int parseCommand(int socket, const char*command)
 
 int reportSay(text_say *s_packet)
 {
-  fprintf(stderr,"[%s][%s]: %s",s_packet->txt_channel,s_packet->txt_username,s_packet->txt_text);
+  fprintf(stderr,"[%s][%s]: %s\n",s_packet->txt_channel,s_packet->txt_username,s_packet->txt_text);
   return 0;
 }
 
@@ -277,20 +277,18 @@ int main(int argc, char *argv[]) {
     //atexit(cooked_mode);
 
     fd_set readfds;
-    FD_ZERO(&readfds);
 
-    FD_SET(h_socket,&readfds);
-    FD_SET(STDIN_FILENO,&readfds);
-    int n = fmax(STDIN_FILENO,h_socket)+1;
-    int r;
     while (connected){
+          FD_ZERO(&readfds);
+
+          FD_SET(h_socket,&readfds);
+          FD_SET(STDIN_FILENO,&readfds);
+          int n = fmax(STDIN_FILENO,h_socket)+1;
           char user_in[SAY_MAX+1];
           char *p_user_in = new char[SAY_MAX];
           //then it loops through providing the user a promp
 
-          r = select(n, &readfds,NULL,NULL,0);
-          if (r > 0)
-          {
+          select(n, &readfds,NULL,NULL,0);
             if (FD_ISSET(STDIN_FILENO,&readfds)){
               fprintf(stderr,"ready to read input\n");
               fgets(user_in,SAY_MAX,stdin);
@@ -310,14 +308,16 @@ int main(int argc, char *argv[]) {
                 debug("Saying a thing",8);
                 sendSay(h_socket,user_in);
               }
+              FD_CLR(STDIN_FILENO,&readfds);
             }
+
             if (FD_ISSET(h_socket,&readfds))
             {
               //a packet was sent from the server, parse it
               fprintf(stderr,"a packet incoming\n");
               parseServerPacket(h_socket);
+              FD_CLR(STDIN_FILENO,&readfds);
             }
-          }
 
         //  delete[] p_user_in;
     };
