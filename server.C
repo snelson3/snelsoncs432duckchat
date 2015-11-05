@@ -15,10 +15,6 @@
 #include <map>
 #include <vector>
 
-struct logged_in_user {
-  char username[USERNAME_MAX];
-} packed;
-
 void myError(const char *msg)
 {
   perror(msg);
@@ -35,8 +31,8 @@ void myError(const char *msg)
 // }
 
 int main(int argc, char *argv[]) {
-  std::map <struct sockaddr_in , struct logged_in_user> users;
-  std::map <char,std::vector <char> > channels;
+  //std::map <string, struct sockaddr_inr> users;
+  //std::map <string,std::vector <string> > channels;
   const char *host_name;
   int host_port, addrlen;
   int my_socket;
@@ -72,15 +68,13 @@ int main(int argc, char *argv[]) {
       //then I need to parse the packet
       if (u_packet->req_type == 0)
       {
-        struct logged_in_user new_user;
         struct sockaddr_in new_client_addr;
-        strcpy(new_user.username, u_packet->req_username);
         new_client_addr.sin_family = AF_INET;
         new_client_addr.sin_addr.s_addr = client_addr.sin_addr.s_addr;
         new_client_addr.sin_port = htons(host_port);
         //deal with login request
-        users.insert(std::make_pair(new_client_addr,new_user));
-        fprintf(stderr,"after call, users size is %ld\n", users.size());
+        //users[u_packet->req_username] = new_client_addr;
+        //fprintf(stderr,"after call, users size is %ld\n", users.size());
       }
       else if (u_packet->req_type == 1)
       {
