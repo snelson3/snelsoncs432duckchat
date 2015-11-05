@@ -15,24 +15,42 @@
 #include <map>
 #include <vector>
 
+using namespace std;
+
 void myError(const char *msg)
 {
   perror(msg);
   exit(-1);
 }
-//
-// void listUsers(std::map<struct sockaddr_in *, char *> users)
-// {
-//   fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
-//   for ( std::map<struct sockaddr_in *,char *>::iterator it = users.begin(); it != users.end(); it++)
-//   {
-//     fprintf(stderr, "%s\n", it->second);
-//   }
-// }
+
+ void dlistUsers(map <string, struct sockaddr_in> users)
+ {
+   fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
+   for ( map<string,struct sockaddr_in>::iterator it = users.begin(); it != users.end(); it++)
+   {
+     fprintf(stderr, "%d\n", it->second.sin_port);
+   }
+ }
+
+ int loggedIn(struct sockaddr_in connection, map <string, struct sockaddr_in> users)
+ {
+   for (map<string,struct sockaddr_in>::iterator it = users.begin(); it!= users.end(); it++)
+   {
+
+     cerr<<connection.sin_port<<" "<<it->second.sin_port<<"\n";
+     if (connection.sin_port == it->second.sin_port)
+     {
+       cerr<<"Logged in!\n";
+       return 1;
+     }
+   }
+   cerr<<"Sorry";
+   return 0;
+ }
 
 int main(int argc, char *argv[]) {
-  //std::map <string, struct sockaddr_inr> users;
-  //std::map <string,std::vector <string> > channels;
+  map <string, struct sockaddr_in> users;
+  map <string,vector <string> > channels;
   const char *host_name;
   int host_port, addrlen;
   int my_socket;
@@ -63,54 +81,50 @@ int main(int argc, char *argv[]) {
       //output debugging whenever receiving message from client
         //[channel][user][message]
 
-    //if server receives message from someone not logged in, ignore.
+      //if server receives message from someone not logged in, ignore.
 
       //then I need to parse the packet
       if (u_packet->req_type == 0)
       {
         struct sockaddr_in new_client_addr;
-        new_client_addr.sin_family = AF_INET;
-        new_client_addr.sin_addr.s_addr = client_addr.sin_addr.s_addr;
-        new_client_addr.sin_port = htons(host_port);
-        //deal with login request
-        //users[u_packet->req_username] = new_client_addr;
-        //fprintf(stderr,"after call, users size is %ld\n", users.size());
+        users.insert(make_pair(u_packet->req_username,client_addr));
+        cerr<<u_packet->req_username<<" Logged in, for "<<users.size()<<" total users\n";
       }
-      else if (u_packet->req_type == 1)
+      else if ((u_packet->req_type == 1) && (loggedIn(client_addr,users)))
       {
         //deal with logout request
 
         //whenever a channel has no users, it's deleted
       }
-      else if (u_packet->req_type == 2)
+      else if ((u_packet->req_type == 2) && (loggedIn(client_addr,users)))
       {
         //deal with join request
 
         //whenever a user joins a nonexistent channel, it's created
       }
-      else if (u_packet->req_type == 3)
+      else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
       {
         //deal with leave request
         //whenever a channel has no users, it's deleted
       }
-      else if (u_packet->req_type == 4)
+      else if ((u_packet->req_type == 4) &&  (loggedIn(client_addr,users)))
       {
         //deal with say request
       }
-      else if (u_packet->req_type == 5)
+      else if ((u_packet->req_type == 5) &&  (loggedIn(client_addr,users)))
       {
         //deal with list request
       }
-      else if (u_packet->req_type == 6)
+      else if ((u_packet->req_type == 6) &&  (loggedIn(client_addr,users)))
       {
         //deal with who request
       }
-      else
+      else if (loggedIn(client_addr,users))
       {
         //send an error
       }
 
-  //  listUsers(users);
+   dlistUsers(users);
 
     }
 
