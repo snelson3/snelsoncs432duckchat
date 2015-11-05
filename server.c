@@ -12,19 +12,34 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <map>
+#include <vector>
+
+struct logged_in_user {
+  char username[USERNAME_MAX];
+} packed;
 
 void myError(const char *msg)
 {
   perror(msg);
   exit(-1);
 }
-
+//
+// void listUsers(std::map<struct sockaddr_in *, char *> users)
+// {
+//   fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
+//   for ( std::map<struct sockaddr_in *,char *>::iterator it = users.begin(); it != users.end(); it++)
+//   {
+//     fprintf(stderr, "%s\n", it->second);
+//   }
+// }
 
 int main(int argc, char *argv[]) {
+  std::map <struct sockaddr_in , struct logged_in_user> users;
+  std::map <char,std::vector <char> > channels;
   const char *host_name;
   int host_port, addrlen;
   int my_socket;
-  char msg[50];
   struct sockaddr_in my_server, client_addr;
     //server takes two arguments
         //host_address port_number
@@ -45,21 +60,69 @@ int main(int argc, char *argv[]) {
 
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
 
-    recvfrom(my_socket,msg,11,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
+    while (1) {
+      struct request_login u_packet[100];
+      //server running, wait for a packet to arrive
+      recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
+      //output debugging whenever receiving message from client
+        //[channel][user][message]
 
-    fprintf(stderr,"printed\n");
+    //if server receives message from someone not logged in, ignore.
 
-    //binds to an ip address, if localhost 127.0.0.1
+      //then I need to parse the packet
+      if (u_packet->req_type == 0)
+      {
+        struct logged_in_user new_user;
+        strcpy(new_user.username, u_packet->req_username);
+        //deal with login request
+        users.insert(std::make_pair(client_addr,new_user));
+        fprintf(stderr,"after call, users size is %ld\n", users.size());
+      }
+      else if (u_packet->req_type == 1)
+      {
+        //deal with logout request
 
-    //output debugging whenever receiving message from client
-      //[channel][user][message]
+        //whenever a channel has no users, it's deleted
+      }
+      else if (u_packet->req_type == 2)
+      {
+        //deal with join request
+
+        //whenever a user joins a nonexistent channel, it's created
+      }
+      else if (u_packet->req_type == 3)
+      {
+        //deal with leave request
+        //whenever a channel has no users, it's deleted
+      }
+      else if (u_packet->req_type == 4)
+      {
+        //deal with say request
+      }
+      else if (u_packet->req_type == 5)
+      {
+        //deal with list request
+      }
+      else if (u_packet->req_type == 6)
+      {
+        //deal with who request
+      }
+      else
+      {
+        //send an error
+      }
+
+  //  listUsers(users);
+
+    }
+
 
     //server delivers messages from a user X to all users on X's active channel
          //must keep track of individual users and channels theyve subbed to
          //also must track each channel and subbed users on it
 
-    //whenever a channel has no users, it's deleted
-    //whenever a user joins a nonexistent channel, it's created
 
-    //if server receives message from someone not logged in, ignore.
+
+
+
 }
