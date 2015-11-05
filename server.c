@@ -73,9 +73,13 @@ int main(int argc, char *argv[]) {
       if (u_packet->req_type == 0)
       {
         struct logged_in_user new_user;
+        struct sockaddr_in new_client_addr;
         strcpy(new_user.username, u_packet->req_username);
+        new_client_addr.sin_family = AF_INET;
+        new_client_addr.sin_addr.s_addr = client_addr.sin_addr.s_addr;
+        new_client_addr.sin_port = htons(host_port);
         //deal with login request
-        users.insert(std::make_pair(client_addr,new_user));
+        users.insert(std::make_pair(new_client_addr,new_user));
         fprintf(stderr,"after call, users size is %ld\n", users.size());
       }
       else if (u_packet->req_type == 1)
