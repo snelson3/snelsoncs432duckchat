@@ -168,6 +168,14 @@ void join(request_join * packet,string user,map<string,vector<string> > *channel
   }
 }
 
+void sendError(sockaddr_in connection, int socket,const char * msg)
+{
+  struct text_error packet;
+  packet.txt_type = TXT_ERROR;
+  strcpy(packet.txt_error,msg);
+  sendto(socket,&packet,sizeof packet, 0, (const sockaddr *)&connection, sizeof connection);
+}
+
 void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map <string,vector<string> > channels,int socket)
 {
   cerr<<user<<"Sends say message in "<<packet->req_channel<<"\n";
@@ -202,26 +210,15 @@ void sendList(sockaddr_in connection, map<string,vector<string> > channels, int 
     cpString(it->first,packet->txt_channels[index].ch_channel,sizeof packet->txt_channels[index].ch_channel);
     index++;
   }
-  cerr<<"list\n";
-  cerr<<"socket "<<socket<<"\n";
-  cerr<<"packet txt_type "<<packet->txt_type<<"\n";
-  cerr<<"packet txt_nusernames "<<packet->txt_nchannels<<"\n";
-  cerr<<"packet username[0] "<<packet->txt_channels[0].ch_channel<<"\n";
-  cerr<<"sizeof packet "<<sizeof packet<<"\n";
-  cerr<<"connection sin_family "<<connection.sin_family<<"\n";
-  cerr<<"connection.sin_addr.s_addr "<<connection.sin_addr.s_addr<<"\n";
-  cerr<<"connection.sin_port "<<connection.sin_port<<"\n";
-  cerr<<"sizeof connection"<<sizeof connection<<"\n";
   sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection,sizeof connection);
 }
 
-void sendWho(sockaddr_in connection, int socket, string channel, map<string, vector<string> > channels)
+void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<string, vector<string> > channels)
 {
   for (map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
   {
-    if (it->first==channel)
+    if (it->first==w_packet->req_channel)
     {
-      cerr<<"I AM RIGHT ARENT I";
       //the right channel, construct the packet and send to person
       struct text_who packet[it->second.size()+40];
       packet->txt_type = TXT_WHO;
@@ -231,20 +228,11 @@ void sendWho(sockaddr_in connection, int socket, string channel, map<string, vec
       {
         cpString(it->second[i],packet->txt_users[i].us_username,sizeof packet->txt_users[i].us_username);
       }
-      cerr<<"who\n";
-      cerr<<"socket "<<socket<<"\n";
-      cerr<<"packet txt_type "<<packet->txt_type<<"\n";
-      cerr<<"packet txt_channel "<<packet->txt_channel<<"\n";
-      cerr<<"packet txt_nusernames "<<packet->txt_nusernames<<"\n";
-      cerr<<"packet username[0] "<<packet->txt_users[0].us_username<<"\n";
-      cerr<<"sizeof packet "<<sizeof packet<<"\n";
-      cerr<<"connection sin_family "<<connection.sin_family<<"\n";
-      cerr<<"connection.sin_addr.s_addr "<<connection.sin_addr.s_addr<<"\n";
-      cerr<<"connection.sin_port "<<connection.sin_port<<"\n";
-      cerr<<"sizeof connection"<<sizeof connection<<"\n";
       sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection, sizeof connection);
+      return;
     }
   }
+  sendError(connection,socket,"Requested channel does not exist");
 }
 
 int main(int argc, char *argv[]) {
@@ -328,7 +316,8 @@ int main(int argc, char *argv[]) {
       {
         //deal with who request
         cerr<<getUser(users,client_addr)<<"gets a list of users in "<<((request_who *)u_packet)->req_channel<<"\n";
-        sendWho(client_addr,   my_socket,    ((request_who *)u_packet)->req_channel    ,channels);
+        sendWho(client_addr,my_socket,(request_who *)u_packet,channels);
+        //sendWho(client_addr,   my_socket,    ((request_who *)u_packet)->req_channel    ,channels);
       }
       else if (loggedIn(client_addr,users))
       {
