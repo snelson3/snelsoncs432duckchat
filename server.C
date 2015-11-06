@@ -23,37 +23,95 @@ void myError(const char *msg)
   exit(-1);
 }
 
- void dlistUsers(map <string, struct sockaddr_in> users)
+ void dListUsers(map <string, struct sockaddr_in> users)
  {
+   cerr<<users.size();
    fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
    for ( map<string,struct sockaddr_in>::iterator it = users.begin(); it != users.end(); it++)
    {
-     cerr<<it->first<<":\n";
-     //cerr<<"\ts_addr: "<<it->second.sin_addr.s_addr<<"\n";
+     cerr<<it->first<<":";
      cerr<<"\tsin_port: "<<it->second.sin_port<<"\n";
-     fprintf(stderr, "%d\n", it->second.sin_addr.s_addr);
    }
  }
 
+void dListChannels(map<string,vector<string> > channels)
+{
+  cerr<<"Printing list of channels for DEBUG purposes\n";
+  for ( map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  {
+    cerr<<it->first<<":";
+    for (int i=0; i < (int)it->second.size();i++)
+    {
+      cerr<<it->second[i]<<",";
+    }
+    cerr<<"\n";
+  }
+}
+
  int loggedIn(struct sockaddr_in connection, map <string, struct sockaddr_in> users)
  {
-   cerr<<"Looking to see if user with IP "<<connection.sin_addr.s_addr<<" and port "<<connection.sin_port<<" is logged in\n";
    for (map<string,struct sockaddr_in>::iterator it = users.begin(); it!= users.end(); it++)
    {
-//     cerr<<"\t is it "<<it->first<<"?\n";
-  //      cerr<<"\t connection's port vs "<<it->first<<"'s port:\n";
-          cerr<<"\n\t\t"<<connection.sin_port <<" vs "<<it->second.sin_port<<"\n";
-    //    cerr<<"\t connection's ip vs " <<it->first<<"'s port:\n";
-      //    cerr<<"\t\t"<<connection.sin_addr.s_addr<<" vs "<<it->second.sin_addr.s_addr<<"\n";
      if (connection.sin_port == it->second.sin_port)
      {
-       cerr<<"Logged in!\n";
        return 1;
      }
    }
-   cerr<<"Sorry\n";
+   cerr<<"Rejected packet from non logged in user\n";
    return 0;
  }
+
+void logIn(struct request_login * l_packet, struct sockaddr_in client_addr, map<string, struct sockaddr_in> users)
+{
+  users.insert(make_pair(l_packet->req_username,client_addr));
+  cerr<<l_packet->req_username<<" Logged in\n";
+}
+
+string getUser(map<string, struct sockaddr_in> users, struct sockaddr_in ip)
+{
+  for (map<string,struct sockaddr_in>::iterator it = users.begin(); it!=users.end(); it++)
+  {
+    if (it->second.sin_port == ip.sin_port) return it->first;
+  }
+  myError("Trying to get invalid user");
+  return "NULL";
+}
+
+bool inChannel(string user, vector<string> channel)
+{
+  for (int i=0; i < (int)channel.size(); i++)
+  {
+    if (user==channel[i]) return true;
+  }
+  return false;
+}
+
+void join(request_join * packet,string user,map<string,vector<string> >channels)
+{
+  //whenever a user joins a nonexistent channel, it's created
+  cerr<<user<<" joining "<<packet->req_channel<<"\n";
+  bool ex = false;
+  for (map<string,vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  {
+    if (it->first==packet->req_channel)
+    {
+      //channel already exists, have to check if user already in channel
+      if (!inChannel(user,it->second))
+      {
+        //can add user to channel
+        it->second.push_back(user);
+      }
+      ex = true;
+    }
+  }
+  if (!ex)
+  {
+    vector<string> joined_users;
+    joined_users.push_back(user);
+    //channel doesn't exist, create channel and add user to channel
+    channels.insert(make_pair(packet->req_channel,joined_users));
+  }
+}
 
 int main(int argc, char *argv[]) {
   map <string, struct sockaddr_in> users;
@@ -85,16 +143,15 @@ int main(int argc, char *argv[]) {
 
 
     while (1) {
-      struct request_login u_packet[100];
+      struct request u_packet[100];
       struct sockaddr_in client_addr;
+      string hacky_name;
       int addrlen;
 
-      cerr<<"uninitialized port "<<client_addr.sin_port<<"\t";
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
-      if (secondpacket) {secondpacket = false; users.insert(make_pair(u_packet->req_username,client_addr));}
-      if (firstpacket) { firstpacket = false; secondpacket = true;}
-      cerr<<"now it's initialized "<<client_addr.sin_port<<"\n";
+      if (secondpacket) {secondpacket = false; users.insert(make_pair(hacky_name,client_addr));}
+      if (firstpacket) { firstpacket = false; secondpacket = true; hacky_name = ((request_login *)u_packet)->req_username;}
       //cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
@@ -105,8 +162,7 @@ int main(int argc, char *argv[]) {
       //then I need to parse the packet
       if (u_packet->req_type == 0)
       {
-        users.insert(make_pair(u_packet->req_username,client_addr));
-        cerr<<u_packet->req_username<<" Logged in with port " << client_addr.sin_port<<", for "<<users.size()<<" total users\n";
+        logIn((request_login *) u_packet, client_addr, users);
       }
       else if ((u_packet->req_type == 1) && (loggedIn(client_addr,users)))
       {
@@ -114,11 +170,10 @@ int main(int argc, char *argv[]) {
 
         //whenever a channel has no users, it's deleted
       }
-      else if ((u_packet->req_type == 2))// && (loggedIn(client_addr,users)))
+      else if ((u_packet->req_type == 2) && (loggedIn(client_addr,users)))
       {
         //deal with join request
-        cerr<<"User sent a join request with port "<<client_addr.sin_port<<"\n";
-        //whenever a user joins a nonexistent channel, it's created
+        join((request_join *) u_packet, getUser(users,client_addr), channels );
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
       {
@@ -142,17 +197,14 @@ int main(int argc, char *argv[]) {
         //send an error
       }
 
-   dlistUsers(users);
 
+      dListUsers(users);
+      dListChannels(channels);
     }
-
 
     //server delivers messages from a user X to all users on X's active channel
          //must keep track of individual users and channels theyve subbed to
          //also must track each channel and subbed users on it
-
-
-
 
 
 }
