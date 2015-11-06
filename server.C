@@ -121,6 +121,11 @@ string getUser(map<string, struct sockaddr_in> users, struct sockaddr_in ip)
   return "NULL";
 }
 
+sockaddr_in getUserByName(map<string,struct sockaddr_in> users, string name)
+{
+  return users[name];
+}
+
 bool inChannel(string user, vector<string> channel)
 {
   for (int i=0; i < (int)channel.size(); i++)
@@ -128,6 +133,12 @@ bool inChannel(string user, vector<string> channel)
     if (user==channel[i]) return true;
   }
   return false;
+}
+
+void cpString(const string& input, char *dst, size_t dst_size)
+{
+  strncpy(dst, input.c_str(),dst_size - 1);
+  dst[dst_size -1] = '\0';
 }
 
 void join(request_join * packet,string user,map<string,vector<string> > *channels)
@@ -154,6 +165,30 @@ void join(request_join * packet,string user,map<string,vector<string> > *channel
     joined_users.push_back(user);
     //channel doesn't exist, create channel and add user to channel
     channels->insert(make_pair(packet->req_channel,joined_users));
+  }
+}
+
+void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map <string,vector<string> > channels,int socket)
+{
+  cerr<<user<<"Sends say message in "<<packet->req_channel<<"\n";
+  struct text_say send_packet;
+  send_packet.txt_type = TXT_SAY;
+  cerr<<"\n\nSETTING TEXT TYPE\n"<<send_packet.txt_type<<"\n\n";
+  strcpy(send_packet.txt_channel,packet->req_channel);
+  cpString(user,send_packet.txt_username,sizeof send_packet.txt_username);
+  strcpy(send_packet.txt_text,packet->req_text);
+  for (map<string,vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  {
+    if (it->first==packet->req_channel)
+    {
+      //this is the right channel, iterate through the users to send the message multiple times
+      for (int i = 0; i < (int)it->second.size(); i++)
+      {
+        string username = it->second[i];
+        sockaddr_in connection= getUserByName(users,username);
+        sendto(socket, &send_packet, sizeof send_packet, 0, (const sockaddr *)&connection,sizeof connection);
+      }
+    }
   }
 }
 
@@ -227,6 +262,7 @@ int main(int argc, char *argv[]) {
       else if ((u_packet->req_type == 4) &&  (loggedIn(client_addr,users)))
       {
         //deal with say request
+        say((request_say *) u_packet, getUser(users,client_addr), users,channels,my_socket);
       }
       else if ((u_packet->req_type == 5) &&  (loggedIn(client_addr,users)))
       {
@@ -242,8 +278,8 @@ int main(int argc, char *argv[]) {
       }
 
 
-      dListUsers(users);
-      dListChannels(channels);
+    //  dListUsers(users);
+    //  dListChannels(channels);
     }
 
     //server delivers messages from a user X to all users on X's active channel

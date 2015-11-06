@@ -262,7 +262,10 @@ int parseServerPacket(int socket)
   {
     reportError((text_error *)u_packet);
   }
-  else perror("Incorrect txt_type\n");
+  else{
+  //printf(stderr,"text type %d",u_packet->txt_type);
+  perror("Incorrect txt_type\n");
+}
   return 0;
 }
 
