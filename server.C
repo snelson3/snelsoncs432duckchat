@@ -25,7 +25,6 @@ void myError(const char *msg)
 
  void dListUsers(map <string, struct sockaddr_in> users)
  {
-   cerr<<users.size();
    fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
    for ( map<string,struct sockaddr_in>::iterator it = users.begin(); it != users.end(); it++)
    {
@@ -61,10 +60,15 @@ void dListChannels(map<string,vector<string> > channels)
    return 0;
  }
 
-void logIn(struct request_login * l_packet, struct sockaddr_in client_addr, map<string, struct sockaddr_in> users)
+void logIn(struct request_login * l_packet, struct sockaddr_in client_addr, map<string, struct sockaddr_in> *users)
 {
-  users.insert(make_pair(l_packet->req_username,client_addr));
+  users->insert(make_pair(l_packet->req_username,client_addr));
   cerr<<l_packet->req_username<<" Logged in\n";
+}
+
+void logout(string user, map<string,struct sockaddr_in> *users, map<string,vector<string> > *channels)
+{
+  //first go through each channel and remove user from the channel's logged in list (make sure to run checkEmpty, or call the Leave function or something)
 }
 
 string getUser(map<string, struct sockaddr_in> users, struct sockaddr_in ip)
@@ -86,12 +90,47 @@ bool inChannel(string user, vector<string> channel)
   return false;
 }
 
-void join(request_join * packet,string user,map<string,vector<string> >channels)
+int getUserIndex(string user, vector<string> channel)
+{
+  for (int i = 0; i < (int)channel.size(); i++)
+  {
+    if (user==channel[i])
+    {
+      return i;
+    }
+  }
+  myError("Control should not have reached here");
+  return 0;
+}
+
+void leave(string user, string channel, map<string,vector<string> > *channels)
+{
+  //find the channel
+  //remove the user from it
+  //if theres nobody in the channel, remove it from the map
+  cerr<<user<<" leaving "<<channel<<"\n";
+  for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
+  {
+    if (channel == it->first)
+    {
+      int n;
+      n = getUserIndex(user,it->second);
+      it->second.erase(it->second.begin()+n);
+      if (it->second.size() == 0)
+      {
+        channels->erase(it->first);
+      }
+      return;
+    }
+  }
+}
+
+void join(request_join * packet,string user,map<string,vector<string> > *channels)
 {
   //whenever a user joins a nonexistent channel, it's created
   cerr<<user<<" joining "<<packet->req_channel<<"\n";
   bool ex = false;
-  for (map<string,vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     if (it->first==packet->req_channel)
     {
@@ -109,7 +148,7 @@ void join(request_join * packet,string user,map<string,vector<string> >channels)
     vector<string> joined_users;
     joined_users.push_back(user);
     //channel doesn't exist, create channel and add user to channel
-    channels.insert(make_pair(packet->req_channel,joined_users));
+    channels->insert(make_pair(packet->req_channel,joined_users));
   }
 }
 
@@ -140,18 +179,17 @@ int main(int argc, char *argv[]) {
     my_server.sin_port = htons(host_port);
 
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
-
+      string hacky_name;
 
     while (1) {
       struct request u_packet[100];
       struct sockaddr_in client_addr;
-      string hacky_name;
-      int addrlen;
 
+      int addrlen;
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
-      if (secondpacket) {secondpacket = false; users.insert(make_pair(hacky_name,client_addr));}
-      if (firstpacket) { firstpacket = false; secondpacket = true; hacky_name = ((request_login *)u_packet)->req_username;}
+      if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
+      if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
       //cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
@@ -162,21 +200,22 @@ int main(int argc, char *argv[]) {
       //then I need to parse the packet
       if (u_packet->req_type == 0)
       {
-        logIn((request_login *) u_packet, client_addr, users);
+        logIn((request_login *) u_packet, client_addr, &users);
       }
       else if ((u_packet->req_type == 1) && (loggedIn(client_addr,users)))
       {
         //deal with logout request
-
+        logout(getUser(users,client_addr),&users,&channels);
         //whenever a channel has no users, it's deleted
       }
       else if ((u_packet->req_type == 2) && (loggedIn(client_addr,users)))
       {
         //deal with join request
-        join((request_join *) u_packet, getUser(users,client_addr), channels );
+        join((request_join *) u_packet, getUser(users,client_addr), &channels );
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
       {
+        leave(getUser(users,client_addr), ((request_leave *)u_packet)->req_channel ,&channels);
         //deal with leave request
         //whenever a channel has no users, it's deleted
       }
@@ -198,7 +237,7 @@ int main(int argc, char *argv[]) {
       }
 
 
-      dListUsers(users);
+      //dListUsers(users);
       dListChannels(channels);
     }
 
