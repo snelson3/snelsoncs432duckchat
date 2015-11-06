@@ -28,23 +28,30 @@ void myError(const char *msg)
    fprintf(stderr,"Printing list of Users for DEBUG purposes\n");
    for ( map<string,struct sockaddr_in>::iterator it = users.begin(); it != users.end(); it++)
    {
-     fprintf(stderr, "%d\n", it->second.sin_port);
+     cerr<<it->first<<":\n";
+     //cerr<<"\ts_addr: "<<it->second.sin_addr.s_addr<<"\n";
+     cerr<<"\tsin_port: "<<it->second.sin_port<<"\n";
+     fprintf(stderr, "%d\n", it->second.sin_addr.s_addr);
    }
  }
 
  int loggedIn(struct sockaddr_in connection, map <string, struct sockaddr_in> users)
  {
+   cerr<<"Looking to see if user with IP "<<connection.sin_addr.s_addr<<" and port "<<connection.sin_port<<" is logged in\n";
    for (map<string,struct sockaddr_in>::iterator it = users.begin(); it!= users.end(); it++)
    {
-
-     cerr<<connection.sin_port<<" "<<it->second.sin_port<<"\n";
+//     cerr<<"\t is it "<<it->first<<"?\n";
+  //      cerr<<"\t connection's port vs "<<it->first<<"'s port:\n";
+          cerr<<"\n\t\t"<<connection.sin_port <<" vs "<<it->second.sin_port<<"\n";
+    //    cerr<<"\t connection's ip vs " <<it->first<<"'s port:\n";
+      //    cerr<<"\t\t"<<connection.sin_addr.s_addr<<" vs "<<it->second.sin_addr.s_addr<<"\n";
      if (connection.sin_port == it->second.sin_port)
      {
        cerr<<"Logged in!\n";
        return 1;
      }
    }
-   cerr<<"Sorry";
+   cerr<<"Sorry\n";
    return 0;
  }
 
@@ -52,9 +59,9 @@ int main(int argc, char *argv[]) {
   map <string, struct sockaddr_in> users;
   map <string,vector <string> > channels;
   const char *host_name;
-  int host_port, addrlen;
+  int host_port;
   int my_socket;
-  struct sockaddr_in my_server, client_addr;
+  struct sockaddr_in my_server;
     //server takes two arguments
         //host_address port_number
     if (argc!=3)
@@ -74,10 +81,15 @@ int main(int argc, char *argv[]) {
 
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
 
+
     while (1) {
       struct request_login u_packet[100];
+      struct sockaddr_in client_addr;
+      int addrlen;
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
+      //cerr<"I RECEIVED A PACKET\n";
+      //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
         //[channel][user][message]
 
@@ -86,9 +98,8 @@ int main(int argc, char *argv[]) {
       //then I need to parse the packet
       if (u_packet->req_type == 0)
       {
-        struct sockaddr_in new_client_addr;
         users.insert(make_pair(u_packet->req_username,client_addr));
-        cerr<<u_packet->req_username<<" Logged in, for "<<users.size()<<" total users\n";
+        cerr<<u_packet->req_username<<" Logged in with port " << client_addr.sin_port<<", for "<<users.size()<<" total users\n";
       }
       else if ((u_packet->req_type == 1) && (loggedIn(client_addr,users)))
       {
@@ -96,10 +107,10 @@ int main(int argc, char *argv[]) {
 
         //whenever a channel has no users, it's deleted
       }
-      else if ((u_packet->req_type == 2) && (loggedIn(client_addr,users)))
+      else if ((u_packet->req_type == 2))// && (loggedIn(client_addr,users)))
       {
         //deal with join request
-
+        cerr<<"User sent a join request with port "<<client_addr.sin_port<<"\n";
         //whenever a user joins a nonexistent channel, it's created
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
