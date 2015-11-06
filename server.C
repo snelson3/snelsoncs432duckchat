@@ -173,7 +173,6 @@ void say(request_say *packet,string user,map<string,struct sockaddr_in> users,ma
   cerr<<user<<"Sends say message in "<<packet->req_channel<<"\n";
   struct text_say send_packet;
   send_packet.txt_type = TXT_SAY;
-  cerr<<"\n\nSETTING TEXT TYPE\n"<<send_packet.txt_type<<"\n\n";
   strcpy(send_packet.txt_channel,packet->req_channel);
   cpString(user,send_packet.txt_username,sizeof send_packet.txt_username);
   strcpy(send_packet.txt_text,packet->req_text);
@@ -190,6 +189,20 @@ void say(request_say *packet,string user,map<string,struct sockaddr_in> users,ma
       }
     }
   }
+}
+
+void sendList(sockaddr_in connection, map<string,vector<string> > channels, int socket)
+{
+  struct text_list packet[channels.size()+8];
+  packet->txt_type = TXT_LIST;
+  packet->txt_nchannels = channels.size();
+  int index = 0;
+  for (map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  {
+    cpString(it->first,packet->txt_channels[index].ch_channel,sizeof packet->txt_channels[index].ch_channel);
+    index++;
+  }
+  sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection,sizeof connection);
 }
 
 int main(int argc, char *argv[]) {
@@ -266,7 +279,8 @@ int main(int argc, char *argv[]) {
       }
       else if ((u_packet->req_type == 5) &&  (loggedIn(client_addr,users)))
       {
-        //deal with list request
+        cerr<< getUser(users,client_addr) <<" gets a list of channels";
+        sendList(client_addr, channels,my_socket);
       }
       else if ((u_packet->req_type == 6) &&  (loggedIn(client_addr,users)))
       {
