@@ -61,6 +61,8 @@ int main(int argc, char *argv[]) {
   const char *host_name;
   int host_port;
   int my_socket;
+  bool firstpacket = true;
+  bool secondpacket = false;
   struct sockaddr_in my_server;
     //server takes two arguments
         //host_address port_number
@@ -86,8 +88,13 @@ int main(int argc, char *argv[]) {
       struct request_login u_packet[100];
       struct sockaddr_in client_addr;
       int addrlen;
+
+      cerr<<"uninitialized port "<<client_addr.sin_port<<"\t";
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
+      if (secondpacket) {secondpacket = false; users.insert(make_pair(u_packet->req_username,client_addr));}
+      if (firstpacket) { firstpacket = false; secondpacket = true;}
+      cerr<<"now it's initialized "<<client_addr.sin_port<<"\n";
       //cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
