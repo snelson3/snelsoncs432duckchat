@@ -202,7 +202,49 @@ void sendList(sockaddr_in connection, map<string,vector<string> > channels, int 
     cpString(it->first,packet->txt_channels[index].ch_channel,sizeof packet->txt_channels[index].ch_channel);
     index++;
   }
+  cerr<<"list\n";
+  cerr<<"socket "<<socket<<"\n";
+  cerr<<"packet txt_type "<<packet->txt_type<<"\n";
+  cerr<<"packet txt_nusernames "<<packet->txt_nchannels<<"\n";
+  cerr<<"packet username[0] "<<packet->txt_channels[0].ch_channel<<"\n";
+  cerr<<"sizeof packet "<<sizeof packet<<"\n";
+  cerr<<"connection sin_family "<<connection.sin_family<<"\n";
+  cerr<<"connection.sin_addr.s_addr "<<connection.sin_addr.s_addr<<"\n";
+  cerr<<"connection.sin_port "<<connection.sin_port<<"\n";
+  cerr<<"sizeof connection"<<sizeof connection<<"\n";
   sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection,sizeof connection);
+}
+
+void sendWho(sockaddr_in connection, int socket, string channel, map<string, vector<string> > channels)
+{
+  for (map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  {
+    if (it->first==channel)
+    {
+      cerr<<"I AM RIGHT ARENT I";
+      //the right channel, construct the packet and send to person
+      struct text_who packet[it->second.size()+40];
+      packet->txt_type = TXT_WHO;
+      cpString(it->first,packet->txt_channel,sizeof packet->txt_channel);
+      packet->txt_nusernames = it->second.size();
+      for (int i = 0; i < (int)it->second.size(); i++)
+      {
+        cpString(it->second[i],packet->txt_users[i].us_username,sizeof packet->txt_users[i].us_username);
+      }
+      cerr<<"who\n";
+      cerr<<"socket "<<socket<<"\n";
+      cerr<<"packet txt_type "<<packet->txt_type<<"\n";
+      cerr<<"packet txt_channel "<<packet->txt_channel<<"\n";
+      cerr<<"packet txt_nusernames "<<packet->txt_nusernames<<"\n";
+      cerr<<"packet username[0] "<<packet->txt_users[0].us_username<<"\n";
+      cerr<<"sizeof packet "<<sizeof packet<<"\n";
+      cerr<<"connection sin_family "<<connection.sin_family<<"\n";
+      cerr<<"connection.sin_addr.s_addr "<<connection.sin_addr.s_addr<<"\n";
+      cerr<<"connection.sin_port "<<connection.sin_port<<"\n";
+      cerr<<"sizeof connection"<<sizeof connection<<"\n";
+      sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection, sizeof connection);
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -285,6 +327,8 @@ int main(int argc, char *argv[]) {
       else if ((u_packet->req_type == 6) &&  (loggedIn(client_addr,users)))
       {
         //deal with who request
+        cerr<<getUser(users,client_addr)<<"gets a list of users in "<<((request_who *)u_packet)->req_channel<<"\n";
+        sendWho(client_addr,   my_socket,    ((request_who *)u_packet)->req_channel    ,channels);
       }
       else if (loggedIn(client_addr,users))
       {
