@@ -1,0 +1,17 @@
+Client saves the user's input (can do some janky shit with fgets after the recv?)
+Server correctly handles and Who.
+Server sends error messages
+Create copies of your client and server source. Modify them to send invalid packets to your good client and server, to see if you can make your client or server crash. Fix any bugs you find.
+
+
+
+CLIENT BUGS TO CHECK
+make sure len(say) > 64 bytes messages get trunctuated.
+client hangs if /who or /list and server doesnt send a packet back
+SERVER BUGS TO CHECK
+I think the server breaks when people try to do things like leave channels they don't belong to (or don't exist)
+needs to send an error packet when like /who <nonexistent channel>
+I think ctrl-cing out of a client, then reconnecting prevents them from logging in
+
+Server does a really janky way of logging in first user
+might wanna fix indentation
