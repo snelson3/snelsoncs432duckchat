@@ -370,14 +370,14 @@ int main(int argc, char *argv[]) {
     // cerr<"Sleeping 5 seconds before connecting to other servers\n";
     // sleep(5);
     //Wait until all the other servers are connected, otherwise my hacky thing breaks
-    cerr<<"This is server port " << my_server.sin_port<<"\n"<<"connected to \n";
-      for (int i=0; i < (int)servers.size();i++)
-      {
-        int sock = socket(PF_INET,SOCK_DGRAM,0);
-        int err = connect(sock, (struct sockaddr*)&servers[i].server, sizeof servers[i].server);
-        servers[i].socket = sock;
-        cerr<<"port "<<servers[i].server.sin_port<<"\n";
-      }
+    // cerr<<"This is server port " << my_server.sin_port<<"\n"<<"connected to \n";
+    //   for (int i=0; i < (int)servers.size();i++)
+    //   {
+    //     int sock = socket(PF_INET,SOCK_DGRAM,0);
+    //     int err = connect(sock, (struct sockaddr*)&servers[i].server, sizeof servers[i].server);
+    //     servers[i].socket = sock;
+    //     cerr<<"port "<<servers[i].server.sin_port<<"\n";
+    //   }
 
 //should be connected to all the servers, hopefully nothing hacky has to be done
 
@@ -387,21 +387,22 @@ int main(int argc, char *argv[]) {
       struct request u_packet[100];
       struct sockaddr_in client_addr;
 
-      int addrlen;
+      socklen_t addrlen;
+      addrlen = sizeof(client_addr);
       //server running, wait for a packet to arrive
-      recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
+      recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,&addrlen);
       cerr<<"Received Clients port "<<client_addr.sin_port<<"\n";
-      if (u_packet->req_type > 7)
-      {
-        if (secondpacket) {secondpacket = false;}
-        if (firstpacket) { firstpacket = false; secondpacket = true;}
-        //s2s packet, has to be a s2s_join
-        //will need to fix hacky method so joins don't send a join back to the server that sent it
-      }
-      else{
-        if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
-        if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
-      }
+      // if (u_packet->req_type > 7)
+      // {
+      //   if (secondpacket) {secondpacket = false;}
+      //   if (firstpacket) { firstpacket = false; secondpacket = true;}
+      //   //s2s packet, has to be a s2s_join
+      //   //will need to fix hacky method so joins don't send a join back to the server that sent it
+      // }
+      // else{
+      //   if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
+      //   if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
+      // }
       //cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
