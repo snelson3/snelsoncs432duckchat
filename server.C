@@ -17,7 +17,17 @@
 
 using namespace std;
 
+/* Server struct, used to keep track of IPs/Host names for the servers*/
 
+struct c_server {
+  sockaddr_in server;
+  int socket;
+};
+
+struct channelcontents {
+  vector<struct c_server> servers;
+  vector<string> usernames;
+};
 
 void myError(const char *msg)
 {
@@ -50,15 +60,15 @@ void outputASay(struct sockaddr_in host, struct sockaddr_in client, const char *
    }
  }
 
-void dListChannels(map<string,vector<string> > channels)
+void dListChannels(map<string,vector<channelcontents> > channels)
 {
   cerr<<"Printing list of channels for DEBUG purposes\n";
-  for ( map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for ( map<string, vector<channelcontents> >::iterator it = channels.begin(); it!=channels.end(); it++)
   {
     cerr<<it->first<<":";
-    for (int i=0; i < (int)it->second.size();i++)
+    for (int i=0; i < (int)it->second.usernames.size();i++)
     {
-      cerr<<it->second[i]<<",";
+      cerr<<it->second.usernames[i]<<",";
     }
     cerr<<"\n";
   }
@@ -76,19 +86,19 @@ int getUserIndex(string user, vector<string> channel)
   return -1;
 }
 
-void leave(string user, string channel, map<string,vector<string> > *channels)
+void leave(string user, string channel, map<string,vector<channelcontents> > *channels)
 {
   //find the channel
   //remove the user from it
   //if theres nobody in the channel, remove it from the map
-  for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
+  for (map<string,vector<channelcontents> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     if (channel == it->first)
     {
       int n;
-      n = getUserIndex(user,it->second);
-      if (n>-1) it->second.erase(it->second.begin()+n);
-      if (it->second.size() == 0)
+      n = getUserIndex(user,it->second.usernames);
+      if (n>-1) it->second.usernames.erase(it->second.usernames.begin()+n);
+      if (it->second.usernames.size() == 0)
       {
         channels->erase(it->first);
       }
@@ -115,10 +125,10 @@ void logIn(struct request_login * l_packet, struct sockaddr_in client_addr, map<
   users->insert(make_pair(l_packet->req_username,client_addr));
 }
 
-void logout(string user, map<string,struct sockaddr_in> *users, map<string,vector<string> > *channels)
+void logout(string user, map<string,struct sockaddr_in> *users, map<string,vector<channelcontents> > *channels)
 {
   //first go through each channel and remove user from the channel's logged in list (make sure to run checkEmpty, or call the Leave function or something)
-  for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
+  for (map<string,vector<channelcontents> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     leave(user,it->first,channels);
   }
@@ -155,29 +165,69 @@ void cpString(const string& input, char *dst, size_t dst_size)
   dst[dst_size -1] = '\0';
 }
 
-void join(request_join * packet,string user,map<string,vector<string> > *channels)
+void s2sJoin(int server_socket, const char * channel)
+{
+  int err;
+  struct s2s_join p_join;
+  p_join.req_type = 8;
+  strcpy(p_join.s2s_channel,channel);
+  err = send(server_socket, &p_join, sizeof p_join, 0);
+  if (err < 0) { myError("Error sending S2S Join");}
+}
+
+void joinS2S(s2s_join * packet, map<string,vector<channelcontents> > * channels, vector<c_server> servers, sockaddr_in host)
+{
+  bool ex = false;
+  for (map<string,vector<channelcontents> >::iterator it = channels->begin(); it!=channels->end(); it++)
+  {
+    if (it->first == packet->s2s_channel)
+    {
+      //channel already exists, join chain ends
+      return;
+    }
+  }
+  //channel doesn't exist, create it and send more joins
+  struct channelcontents cc;
+  vector<string> joined_users;
+  cc.usernames = joined_users;
+  channels->insert(make_pair(packet->s2s_channel,cc));
+  for (int i = 0; i < (int)servers.size(); i++)
+  {
+    outputWithChannel(host,servers[i].server,"send S2S Join", packet->s2s_channel);
+    s2sJoin(servers[i].socket,packet->s2s_channel);
+  }
+}
+
+void join(request_join * packet,string user,map<string,vector<channelcontents> > *channels, vector<c_server> servers,sockaddr_in host)
 {
   //whenever a user joins a nonexistent channel, it's created
   bool ex = false;
-  for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
+  for (map<string,vector<channelcontents> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     if (it->first==packet->req_channel)
     {
       //channel already exists, have to check if user already in channel
-      if (!inChannel(user,it->second))
+      if (!inChannel(user,it->second.usernames))
       {
         //can add user to channel
-        it->second.push_back(user);
+        it->second.usernames.push_back(user);
       }
       ex = true;
     }
   }
   if (!ex)
   {
+    struct channelcontents cc;
     vector<string> joined_users;
     joined_users.push_back(user);
-    //channel doesn't exist, create channel and add user to channel
-    channels->insert(make_pair(packet->req_channel,joined_users));
+    cc.usernames = joined_users;
+    //channel doesn't exist, create channel and add user to channel, also S2S join
+    channels->insert(make_pair(packet->req_channel,cc));
+    for (int i = 0; i < (int)servers.size(); i++)
+    {
+      outputWithChannel(host,servers[i].server,"send S2S Join ", packet->req_channel);
+      s2sJoin(servers[i].socket, packet->req_channel);
+    }
   }
 }
 
@@ -189,21 +239,21 @@ void sendError(sockaddr_in connection, int socket,const char * msg)
   sendto(socket,&packet,sizeof packet, 0, (const sockaddr *)&connection, sizeof connection);
 }
 
-void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map <string,vector<string> > channels,int socket)
+void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map<string,vector<channelcontents> > channels,int socket)
 {
   struct text_say send_packet;
   send_packet.txt_type = TXT_SAY;
   strcpy(send_packet.txt_channel,packet->req_channel);
   cpString(user,send_packet.txt_username,sizeof send_packet.txt_username);
   strcpy(send_packet.txt_text,packet->req_text);
-  for (map<string,vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for (map<string,vector<channelcontents> >::iterator it = channels.begin(); it!=channels.end(); it++)
   {
     if (it->first==packet->req_channel)
     {
       //this is the right channel, iterate through the users to send the message multiple times
-      for (int i = 0; i < (int)it->second.size(); i++)
+      for (int i = 0; i < (int)it->second.usernamessize(); i++)
       {
-        string username = it->second[i];
+        string username = it->second.usernames[i];
         sockaddr_in connection= getUserByName(users,username);
         sendto(socket, &send_packet, sizeof send_packet, 0, (const sockaddr *)&connection,sizeof connection);
       }
@@ -211,13 +261,13 @@ void say(request_say *packet,string user,map<string,struct sockaddr_in> users,ma
   }
 }
 
-void sendList(sockaddr_in connection, map<string,vector<string> > channels, int socket)
+void sendList(sockaddr_in connection, map<string,vector<channelcontents> > channels, int socket)
 {
   struct text_list packet[channels.size()+8];
   packet->txt_type = TXT_LIST;
   packet->txt_nchannels = channels.size();
   int index = 0;
-  for (map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for (map<string, vector<channelcontents> >::iterator it = channels.begin(); it!=channels.end(); it++)
   {
     cpString(it->first,packet->txt_channels[index].ch_channel,sizeof packet->txt_channels[index].ch_channel);
     index++;
@@ -225,20 +275,20 @@ void sendList(sockaddr_in connection, map<string,vector<string> > channels, int 
   sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection,sizeof connection);
 }
 
-void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<string, vector<string> > channels)
+void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<string, vector<channelcontents> > channels)
 {
-  for (map<string, vector<string> >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for (map<string, vector<channelcontents> >::iterator it = channels.begin(); it!=channels.end(); it++)
   {
     if (it->first==w_packet->req_channel)
     {
       //the right channel, construct the packet and send to person
-      struct text_who packet[it->second.size()+40];
+      struct text_who packet[it->second.usernames.size()+40];
       packet->txt_type = TXT_WHO;
       cpString(it->first,packet->txt_channel,sizeof packet->txt_channel);
-      packet->txt_nusernames = it->second.size();
-      for (int i = 0; i < (int)it->second.size(); i++)
+      packet->txt_nusernames = it->second.usernames.size();
+      for (int i = 0; i < (int)it->second.usernames.size(); i++)
       {
-        cpString(it->second[i],packet->txt_users[i].us_username,sizeof packet->txt_users[i].us_username);
+        cpString(it->second.usernames[i],packet->txt_users[i].us_username,sizeof packet->txt_users[i].us_username);
       }
       sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection, sizeof connection);
       return;
@@ -247,19 +297,13 @@ void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<stri
   sendError(connection,socket,"Requested channel does not exist");
 }
 
-/* Server struct, used to keep track of IPs/Host names for the servers*/
-struct c_server {
-  sockaddr_in server;
-  int connected;
-
-};
 
 
 int main(int argc, char *argv[]) {
   //Server must take variable number of arguments, in additional to the first two currently used, takes IP Addresses and Port numbers of additional servers
   //server must also keep track of which adjacent servers are subscribed to a channel
   map <string, struct sockaddr_in> users;
-  map <string,vector <string> > channels;
+  map <string,vector <channelcontents> > channels;
   vector <c_server> servers;
   const char *host_name;
   int host_port;
@@ -288,7 +332,6 @@ int main(int argc, char *argv[]) {
       new_server.server.sin_addr.s_addr = htons(INADDR_ANY);
       p = strtol(argv[i+1],NULL,0);
       new_server.server.sin_port = htons(p);
-      new_server.connected = 0;
       servers.push_back(new_server);
     }
 
@@ -301,31 +344,19 @@ int main(int argc, char *argv[]) {
     my_server.sin_port = htons(host_port);
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
 
+    // cerr<"Sleeping 5 seconds before connecting to other servers\n";
+    // sleep(5);
     //Wait until all the other servers are connected, otherwise my hacky thing breaks
-    int unconnected = servers.size();
-    while (unconnected > 0)
-    {
-      cerr<<"Attempting to connect to servers\n";
-      unconnected = 0;
+    cerr<<"This is server port " << my_server.sin_port<<"\n"<<"connected to \n";
       for (int i=0; i < (int)servers.size();i++)
       {
-        if (servers[i].connected == 0)
-        {
-          cerr<<"Connecting to "<<servers[i].server.sin_port<<",\n";
-          int sock = socket(PF_INET,SOCK_DGRAM,0);
-          int err = connect(sock, (struct sockaddr*)&servers[i], sizeof servers[i]);
-          if (err < 0){
-            cerr<<"Could not connect to server with port "<<servers[i].server.sin_port<<"\n";
-            unconnected++;
-          }
-          else cerr<<"Connected to server in port "<<servers[i].server.sin_port<<"\n";
-        }
+        int sock = socket(PF_INET,SOCK_DGRAM,0);
+        int err = connect(sock, (struct sockaddr*)&servers[i], sizeof servers[i]);
+        servers[i].socket = sock;
+        cerr<<"port "<<servers[i].server.sin_port;
       }
-      if (unconnected > 0)cerr<<"Could not connect to all servers\n";
-      sleep(1);
-    }
 
-
+//should be connected to all the servers, hopefully nothing hacky has to be done
 
       string hacky_name;
 
@@ -336,8 +367,15 @@ int main(int argc, char *argv[]) {
       int addrlen;
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,(socklen_t *)&addrlen);
-      if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
-      if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
+      if (u_packet->req_type > 7)
+      {
+        //s2s packet
+        //will need to fix hacky method so joins don't send a join back to the server that sent it
+      }
+      else{
+        if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
+        if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
+      }
       //cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
@@ -361,7 +399,14 @@ int main(int argc, char *argv[]) {
       {
         //deal with join request
         outputWithChannel(my_server,client_addr,"recv Request Join",((request_join *)u_packet)->req_channel);
-        join((request_join *) u_packet, getUser(users,client_addr), &channels );
+        join((request_join *) u_packet, getUser(users,client_addr), &channels, servers,my_server );
+      }
+      else if (u_packet->req_type == 8)
+      {
+        //deal with s2s join request
+
+        outputWithChannel(my_server,client_addr,"recv S2S Join ",((s2s_join *)u_packet)->s2s_channel);
+        joinS2S((s2s_join *)u_packet,&channels,servers,my_server);
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
       {
@@ -396,7 +441,7 @@ int main(int argc, char *argv[]) {
 
 
     //  dListUsers(users);
-    //  dListChannels(channels);
+      dListChannels(channels);
     }
 
     //server delivers messages from a user X to all users on X's active channel
