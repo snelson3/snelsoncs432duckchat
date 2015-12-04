@@ -41,6 +41,7 @@ typedef int text_t;
 #define TXT_WHO 2
 #define TXT_ERROR 3
 
+
 /* This structure is used for a generic request type, to the server. */
 struct request {
         request_t req_type;

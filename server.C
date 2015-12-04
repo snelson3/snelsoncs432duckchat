@@ -17,10 +17,27 @@
 
 using namespace std;
 
+
+
 void myError(const char *msg)
 {
   perror(msg);
   exit(-1);
+}
+
+void outputMSG(struct sockaddr_in host, struct sockaddr_in client,const char * packetmsg)
+{
+  cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<"\n";
+}
+
+void outputWithChannel(struct sockaddr_in host, struct sockaddr_in client, const char * packetmsg, const char * channelname)
+{
+  cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<channelname<<"\n";
+}
+
+void outputASay(struct sockaddr_in host, struct sockaddr_in client, const char * packetmsg, string username, const char * channelname, const char *msg)
+{
+  cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<username<<" "<<channelname<<" "<<msg<<"\n";
 }
 
  void dListUsers(map <string, struct sockaddr_in> users)
@@ -64,7 +81,6 @@ void leave(string user, string channel, map<string,vector<string> > *channels)
   //find the channel
   //remove the user from it
   //if theres nobody in the channel, remove it from the map
-  cerr<<user<<" leaving "<<channel<<"\n";
   for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     if (channel == it->first)
@@ -97,7 +113,6 @@ void leave(string user, string channel, map<string,vector<string> > *channels)
 void logIn(struct request_login * l_packet, struct sockaddr_in client_addr, map<string, struct sockaddr_in> *users)
 {
   users->insert(make_pair(l_packet->req_username,client_addr));
-  cerr<<l_packet->req_username<<" Logged in\n";
 }
 
 void logout(string user, map<string,struct sockaddr_in> *users, map<string,vector<string> > *channels)
@@ -108,7 +123,6 @@ void logout(string user, map<string,struct sockaddr_in> *users, map<string,vecto
     leave(user,it->first,channels);
   }
   users->erase(user);
-  cerr<<user<<" logged out\n";
 }
 
 string getUser(map<string, struct sockaddr_in> users, struct sockaddr_in ip)
@@ -144,7 +158,6 @@ void cpString(const string& input, char *dst, size_t dst_size)
 void join(request_join * packet,string user,map<string,vector<string> > *channels)
 {
   //whenever a user joins a nonexistent channel, it's created
-  cerr<<user<<" joining "<<packet->req_channel<<"\n";
   bool ex = false;
   for (map<string,vector<string> >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
@@ -178,7 +191,6 @@ void sendError(sockaddr_in connection, int socket,const char * msg)
 
 void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map <string,vector<string> > channels,int socket)
 {
-  cerr<<user<<"Sends say message in "<<packet->req_channel<<"\n";
   struct text_say send_packet;
   send_packet.txt_type = TXT_SAY;
   strcpy(send_packet.txt_channel,packet->req_channel);
@@ -235,18 +247,31 @@ void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<stri
   sendError(connection,socket,"Requested channel does not exist");
 }
 
+/* Server struct, used to keep track of IPs/Host names for the servers*/
+struct c_server {
+  sockaddr_in server;
+  int connected;
+
+};
+
+
 int main(int argc, char *argv[]) {
+  //Server must take variable number of arguments, in additional to the first two currently used, takes IP Addresses and Port numbers of additional servers
+  //server must also keep track of which adjacent servers are subscribed to a channel
   map <string, struct sockaddr_in> users;
   map <string,vector <string> > channels;
+  vector <c_server> servers;
   const char *host_name;
   int host_port;
   int my_socket;
   bool firstpacket = true;
   bool secondpacket = false;
   struct sockaddr_in my_server;
-    //server takes two arguments
+    //server takes two arguments repeatedly
         //host_address port_number
-    if (argc!=3)
+    if (argc<3)
+      myError("Wrong number of arguments");
+    if (argc % 2 == 0)
       myError("Wrong number of arguments");
     if (strcmp("localhost",argv[1]) == 0)
       host_name = LOCALHOST;
@@ -254,14 +279,54 @@ int main(int argc, char *argv[]) {
       host_name = argv[1];
     host_port = strtol(argv[2],NULL,0);
 
+    for (int i = 3; i < argc; i+=2)
+    {
+      int p;
+      const char * hn;
+      c_server new_server;
+      new_server.server.sin_family = AF_INET;
+      new_server.server.sin_addr.s_addr = htons(INADDR_ANY);
+      p = strtol(argv[i+1],NULL,0);
+      new_server.server.sin_port = htons(p);
+      new_server.connected = 0;
+      servers.push_back(new_server);
+    }
+
     my_socket = socket(PF_INET,SOCK_DGRAM,0);
 
     //binding the socket
     my_server.sin_family = AF_INET;
     my_server.sin_addr.s_addr = htons(INADDR_ANY);
-    my_server.sin_port = htons(host_port);
 
+    my_server.sin_port = htons(host_port);
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
+
+    //Wait until all the other servers are connected, otherwise my hacky thing breaks
+    int unconnected = servers.size();
+    while (unconnected > 0)
+    {
+      cerr<<"Attempting to connect to servers\n";
+      unconnected = 0;
+      for (int i=0; i < (int)servers.size();i++)
+      {
+        if (servers[i].connected == 0)
+        {
+          cerr<<"Connecting to "<<servers[i].server.sin_port<<",\n";
+          int sock = socket(PF_INET,SOCK_DGRAM,0);
+          int err = connect(sock, (struct sockaddr*)&servers[i], sizeof servers[i]);
+          if (err < 0){
+            cerr<<"Could not connect to server with port "<<servers[i].server.sin_port<<"\n";
+            unconnected++;
+          }
+          else cerr<<"Connected to server in port "<<servers[i].server.sin_port<<"\n";
+        }
+      }
+      if (unconnected > 0)cerr<<"Could not connect to all servers\n";
+      sleep(1);
+    }
+
+
+
       string hacky_name;
 
     while (1) {
@@ -288,33 +353,38 @@ int main(int argc, char *argv[]) {
       else if ((u_packet->req_type == 1) && (loggedIn(client_addr,users)))
       {
         //deal with logout request
+        outputMSG(my_server,client_addr,"recv Request Logout");
         logout(getUser(users,client_addr),&users,&channels);
         //whenever a channel has no users, it's deleted
       }
       else if ((u_packet->req_type == 2) && (loggedIn(client_addr,users)))
       {
         //deal with join request
+        outputWithChannel(my_server,client_addr,"recv Request Join",((request_join *)u_packet)->req_channel);
         join((request_join *) u_packet, getUser(users,client_addr), &channels );
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
       {
+        outputWithChannel(my_server,client_addr,"recv Request Leave",((request_leave *)u_packet)->req_channel);
         leave(getUser(users,client_addr), ((request_leave *)u_packet)->req_channel ,&channels);
         //deal with leave request
         //whenever a channel has no users, it's deleted
       }
       else if ((u_packet->req_type == 4) &&  (loggedIn(client_addr,users)))
       {
+        outputASay(my_server,client_addr,"recv Request Say", getUser(users,client_addr), ((request_say *)u_packet)->req_channel, ((request_say *)u_packet)->req_text);
         //deal with say request
         say((request_say *) u_packet, getUser(users,client_addr), users,channels,my_socket);
       }
       else if ((u_packet->req_type == 5) &&  (loggedIn(client_addr,users)))
       {
-        cerr<< getUser(users,client_addr) <<" gets a list of channels";
+        outputMSG(my_server,client_addr,"recv Request List");
         sendList(client_addr, channels,my_socket);
       }
       else if ((u_packet->req_type == 6) &&  (loggedIn(client_addr,users)))
       {
         //deal with who request
+        outputWithChannel(my_server,client_addr,"recv Request Who",((request_who *)u_packet)->req_channel);
         cerr<<getUser(users,client_addr)<<"gets a list of users in "<<((request_who *)u_packet)->req_channel<<"\n";
         sendWho(client_addr,my_socket,(request_who *)u_packet,channels);
         //sendWho(client_addr,   my_socket,    ((request_who *)u_packet)->req_channel    ,channels);
