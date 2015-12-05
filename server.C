@@ -53,7 +53,7 @@ void randomID(char * id)
 bool isRecentID(string id, vector<string> recent)
 {
   for (int i = 0; i < (int)recent.size(); i++)
-  {+9
+  {
     if (id ==recent[i]) return true;
   }
   return false;
@@ -233,7 +233,6 @@ void s2sLeaveS(string channel, int socket, sockaddr_in connection)
   p_leave.req_type = 9;
   char ch[CHANNEL_MAX];
   cpString(channel,p_leave.s2s_channel,sizeof p_leave.s2s_channel);
-  // strcpy(p_leave.s2s_channel,channel);
   err = sendto(socket,&p_leave, sizeof p_leave, 0, (const sockaddr *) &connection, sizeof connection);
 }
 
@@ -287,7 +286,6 @@ void joinS2S(s2s_join * packet, map<string,struct channelcontents > * channels, 
   struct channelcontents cc;
   vector<string> joined_users;
   cc.usernames = joined_users;
-  //cerr<<"THIS IS THE CLIENT SERVERS SIN_PORT "<<client.sin_port<<"\n";
   for (int i = 0; i < (int)servers.size(); i++)
   {
     cc.servers.push_back(servers[i]);
@@ -297,13 +295,7 @@ void joinS2S(s2s_join * packet, map<string,struct channelcontents > * channels, 
       s2sJoin(socket,packet->s2s_channel,cc.servers[i].server);
     }
   }
-  //cc.servers.erase(removeServerIndex(cc.servers, client));
   channels->insert(make_pair(packet->s2s_channel,cc));
-  // for (int i = 0; i < (int)cc.servers.size(); i++)
-  // {
-  //   outputWithChannel(host,cc.servers[i].server,"send S2S Join", packet->s2s_channel);
-  //   s2sJoin(socket,packet->s2s_channel,cc.servers[i].server);
-  // }
 }
 
 void join(request_join * packet,string user,map<string,struct channelcontents > *channels, vector<c_server> servers,sockaddr_in host,int socket)
@@ -362,13 +354,9 @@ void sayS2S(s2s_say *packet, map<string,struct sockaddr_in> users, map<string, s
     if (it->first == packet->s2s_channel)
     {
       //this is the right channel, iterate through users to send the message multiple times
-      cerr<<"IDS\n\n\n";
-      // for (int i = 0; i < (int)it->second.ids.size();i++) cerr<<it->second.ids[i]<<"\n";
-      // if (isRecentID(it->second.ids[0],it->second.ids)) cerr<<"\nLooks like it's working right\n";
-      //check if ID matches recent list
+    //  cerr<<"IDS\n\n\n";
       if (isRecentID((string)packet->id,it->second.ids))
       {
-         //if so return/leave
          outputWithChannelS(host,client,"send S2S Leave",it->first);
          s2sLeaveS(it->first,socket,client);
          return;
@@ -469,7 +457,7 @@ void sendList(sockaddr_in connection, map<string,struct channelcontents > channe
     cpString(it->first,packet->txt_channels[index].ch_channel,sizeof packet->txt_channels[index].ch_channel);
     index++;
   }
-  sendto(socket,&packet,sizeof packet,0,(const sockaddr *)&connection,sizeof connection);
+  sendto(socket,&packet,sizeof packet,0,(const sockaddr *) &connection,sizeof connection);
 }
 
 void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<string, struct channelcontents > channels)
@@ -497,8 +485,6 @@ void sendWho(sockaddr_in connection, int socket, request_who *w_packet, map<stri
 
 
 int main(int argc, char *argv[]) {
-  //Server must take variable number of arguments, in additional to the first two currently used, takes IP Addresses and Port numbers of additional servers
-  //server must also keep track of which adjacent servers are subscribed to a channel
   map <string, struct sockaddr_in> users;
   map <string,struct channelcontents > channels;
   vector <c_server> servers;
@@ -541,24 +527,11 @@ int main(int argc, char *argv[]) {
     my_server.sin_port = htons(host_port);
     bind(my_socket, (struct sockaddr *) &my_server, sizeof(my_server));
 
-    // cerr<"Sleeping 5 seconds before connecting to other servers\n";
-    // sleep(5);
-    //Wait until all the other servers are connected, otherwise my hacky thing breaks
-    // cerr<<"This is server port " << my_server.sin_port<<"\n"<<"connected to \n";
-    //   for (int i=0; i < (int)servers.size();i++)
-    //   {
-    //     int sock = socket(PF_INET,SOCK_DGRAM,0);
-    //     int err = connect(sock, (struct sockaddr*)&servers[i].server, sizeof servers[i].server);
-    //     servers[i].socket = sock;
-    //     cerr<<"port "<<servers[i].server.sin_port<<"\n";
-    //   }
 
-//should be connected to all the servers, hopefully nothing hacky has to be done
 
       string hacky_name;
 
     while (1) {
-      cerr<<"WHILE LOOP INTERATION\n";
       struct request u_packet[100];
       struct sockaddr_in client_addr;
 
@@ -566,24 +539,6 @@ int main(int argc, char *argv[]) {
       addrlen = sizeof(client_addr);
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,&addrlen);
-      //cerr<<"Received Clients port "<<client_addr.sin_port<<"\n";
-      // if (u_packet->req_type > 7)
-      // {
-      //   if (secondpacket) {secondpacket = false;}
-      //   if (firstpacket) { firstpacket = false; secondpacket = true;}
-      //   //s2s packet, has to be a s2s_join
-      //   //will need to fix hacky method so joins don't send a join back to the server that sent it
-      // }
-      // else{
-      //   if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
-      //   if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
-      // }
-      cerr<"I RECEIVED A PACKET\n";
-      //fprintf(stderr,"I RECEIVED A PACKET");
-      //output debugging whenever receiving message from client
-        //[channel][user][message]
-
-      //if server receives message from someone not logged in, ignore.
 
       //then I need to parse the packet
       if (u_packet->req_type == 0)
@@ -654,7 +609,7 @@ int main(int argc, char *argv[]) {
 
 
     //  dListUsers(users);
-      dListChannels(channels);
+    //  dListChannels(channels);
     }
 
     //server delivers messages from a user X to all users on X's active channel
