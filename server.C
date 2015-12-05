@@ -45,31 +45,15 @@ void myError(const char *msg)
 
 void randomID(char * id)
 {
-  // uuid id;
-  // uuid id_ns;
-  // char *str;
-  //
-  // id_ns.load("ns:URL");
-  // id.make(UUID_MAKE_V3, &id_ns, "/dev/urandom");
-  // str = id.string();
-  // return str;
-//  cerr<<"GENERATING A RAND VAL ";
   uuid_t random;
   uuid_generate(random);
-//  cerr<<"random               "<<random<<"\n";
-  //cerr<<"GENERATING A RAND VAL random            "<<random<<"\n";
   strcpy(id,(char *) random);
 }
 
 bool isRecentID(string id, vector<string> recent)
 {
-//  cerr<<"size is "<<recent.size()<<"COMPARINGCOMPARINGCOMPARING\n"<<id<<"\n"<<"with \n";
- for (int i = 0; i < (int)recent.size(); i++) cerr<<recent[i]<<"\n";
   for (int i = 0; i < (int)recent.size(); i++)
-  {
-    //cerr<<recent[i]<<"\n";
-    //char test[SAY_ID_MAX];
-    //cpString(recent[i],test,sizeof test);
+  {+9
     if (id ==recent[i]) return true;
   }
   return false;
@@ -89,7 +73,6 @@ void outputWithChannelS(struct sockaddr_in host, struct sockaddr_in client, cons
 {
   cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<channelname<<"\n";
 }
-
 
 void outputASay(struct sockaddr_in host, struct sockaddr_in client, const char * packetmsg, string username, const char * channelname, const char *msg)
 {
