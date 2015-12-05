@@ -85,6 +85,12 @@ void outputWithChannel(struct sockaddr_in host, struct sockaddr_in client, const
   cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<channelname<<"\n";
 }
 
+void outputWithChannelS(struct sockaddr_in host, struct sockaddr_in client, const char * packetmsg, string channelname)
+{
+  cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<channelname<<"\n";
+}
+
+
 void outputASay(struct sockaddr_in host, struct sockaddr_in client, const char * packetmsg, string username, const char * channelname, const char *msg)
 {
   cerr<<"127.0.0.1:"<<host.sin_port<<" 127.0.0.1:"<<client.sin_port<<" "<<packetmsg<<" "<<username<<" "<<channelname<<" "<<msg<<"\n";
@@ -114,6 +120,19 @@ void dListChannels(map<string,struct channelcontents > channels)
   }
 }
 
+int getClientIndex(sockaddr_in client, vector<c_server> servers)
+{
+  for (int i = 0; i < (int)servers.size(); i++)
+  {
+    if (client.sin_port==servers[i].server.sin_port)
+    {
+      return i;
+    }
+  }
+  return -1;
+}
+
+
 int getUserIndex(string user, vector<string> channel)
 {
   for (int i = 0; i < (int)channel.size(); i++)
@@ -140,7 +159,10 @@ void leave(string user, string channel, map<string,struct channelcontents > *cha
       if (n>-1) it->second.usernames.erase(it->second.usernames.begin()+n);
       if (it->second.usernames.size() == 0)
       {
-        channels->erase(it->first);
+        if (it->second.servers.size() == 0)
+          {
+            channels->erase(it->first);
+          }
       }
       return;
     }
@@ -212,6 +234,49 @@ bool inChannel(string user, vector<string> channel)
 }
 
 
+void s2sLeave(const char * channel, int socket, sockaddr_in connection)
+{
+  int err;
+  struct s2s_leave p_leave;
+  p_leave.req_type = 9;
+  strcpy(p_leave.s2s_channel,channel);
+  err = sendto(socket,&p_leave, sizeof p_leave, 0, (const sockaddr *) &connection, sizeof connection);
+}
+
+void s2sLeaveS(string channel, int socket, sockaddr_in connection)
+{
+  int err;
+  struct s2s_leave p_leave;
+  p_leave.req_type = 9;
+  char ch[CHANNEL_MAX];
+  cpString(channel,p_leave.s2s_channel,sizeof p_leave.s2s_channel);
+  // strcpy(p_leave.s2s_channel,channel);
+  err = sendto(socket,&p_leave, sizeof p_leave, 0, (const sockaddr *) &connection, sizeof connection);
+}
+
+void leaveS2S(map<string,struct channelcontents > * channels, const char * channel, sockaddr_in client)
+{
+  //remove from channels server list
+  for (map<string,struct channelcontents>::iterator it = channels->begin(); it!=channels->end(); it++)
+  {
+    if (it->first == channel)
+    {
+      int n;
+      n = getClientIndex(client,it->second.servers);
+      it->second.servers.erase(it->second.servers.begin()+n);
+        //if size of channel server list is 0
+      if (it->second.servers.size() == 0)
+      {
+          //and 0 Clients
+        if (it->second.usernames.size() == 0)
+        {
+            //delete channel
+          channels->erase(it->first);
+        }
+      }
+    }
+  }
+}
 
 void s2sJoin(int socket, const char * channel,sockaddr_in connection)
 {
@@ -321,8 +386,20 @@ void sayS2S(s2s_say *packet, map<string,struct sockaddr_in> users, map<string, s
       if (isRecentID((string)packet->id,it->second.ids))
       {
          //if so return/leave
-         cerr<<"IM A MATCHED ID\n";
+         outputWithChannelS(host,client,"send S2S Leave",it->first);
+         s2sLeaveS(it->first,socket,client);
          return;
+      }
+
+      if ((int)it->second.usernames.size() == 0)
+      {
+        if ((int)it->second.servers.size() == 1)
+        {
+          outputWithChannelS(host,client,"send S2S Leave",it->first);
+          s2sLeaveS(it->first,socket,client);
+          channels->erase(it->first);
+          return;
+        }
       }
       for (int i = 0; i < (int)it->second.usernames.size(); i++)
       {
@@ -546,7 +623,7 @@ int main(int argc, char *argv[]) {
       else if (u_packet->req_type == 8)
       {
         //deal with s2s join request
-        outputWithChannel(my_server,client_addr,"recv S2S Join ",((s2s_join *)u_packet)->s2s_channel);
+        outputWithChannel(my_server,client_addr,"recv S2S Join",((s2s_join *)u_packet)->s2s_channel);
         joinS2S((s2s_join *)u_packet,&channels,servers,my_server, client_addr,my_socket);
       }
       else if ((u_packet->req_type == 3) &&  (loggedIn(client_addr,users)))
@@ -555,6 +632,12 @@ int main(int argc, char *argv[]) {
         leave(getUser(users,client_addr), ((request_leave *)u_packet)->req_channel ,&channels);
         //deal with leave request
         //whenever a channel has no users, it's deleted
+      }
+      else if (u_packet->req_type == 9)
+      {
+        //deal with s2s leave request
+        outputWithChannel(my_server,client_addr,"recv S2S Leave",((s2s_leave *)u_packet)->s2s_channel);
+        leaveS2S(&channels,((s2s_leave *)u_packet)->s2s_channel,client_addr);
       }
       else if ((u_packet->req_type == 4) &&  (loggedIn(client_addr,users)))
       {
