@@ -435,15 +435,12 @@ void say(request_say *packet,string user,map<string,struct sockaddr_in> users,ma
       for (int i = 0; i < (int)it->second.servers.size(); i++)
       {
         int err;
-        cerr<<"UUID "<<sizeof spacket.id<<"\n";
 
         outputASay(host,it->second.servers[i].server,"send S2S Say", spacket.s2s_username, spacket.s2s_channel, spacket.s2s_text);
         err = sendto(socket,&spacket,sizeof spacket,0, (const sockaddr *) &it->second.servers[i].server, sizeof it->second.servers[i].server);
-        cerr<<"ERR NO "<<err<<"\n";
       }
     }
   }
-  cerr<<"DONE WITH THE SAY\n";
 }
 
 void sendList(sockaddr_in connection, map<string,struct channelcontents > channels, int socket)
