@@ -10,7 +10,7 @@ client: client.c raw.c
 	$(CC) client.c raw.c $(CFLAGS) -o client
 
 server: server.C
-	$(CC) server.C $(CFLAGS) -o server
+	$(CC) server.C $(CFLAGS) -o server -luuid 
 
 clean:
 	rm -f client server *.o
