@@ -14,10 +14,17 @@
 #include <sys/types.h>
 #include <map>
 #include <vector>
+#include <uuid/uuid.h>
 
 using namespace std;
 
 /* Server struct, used to keep track of IPs/Host names for the servers*/
+
+void cpString(const string& input, char *dst, size_t dst_size)
+{
+  strncpy(dst, input.c_str(),dst_size - 1);
+  dst[dst_size -1] = '\0';
+}
 
 struct c_server {
   sockaddr_in server;
@@ -27,12 +34,45 @@ struct c_server {
 struct channelcontents {
   vector<struct c_server> servers;
   vector<string> usernames;
+  vector<string> ids;
 };
 
 void myError(const char *msg)
 {
   perror(msg);
   exit(-1);
+}
+
+void randomID(char * id)
+{
+  // uuid id;
+  // uuid id_ns;
+  // char *str;
+  //
+  // id_ns.load("ns:URL");
+  // id.make(UUID_MAKE_V3, &id_ns, "/dev/urandom");
+  // str = id.string();
+  // return str;
+//  cerr<<"GENERATING A RAND VAL ";
+  uuid_t random;
+  uuid_generate(random);
+//  cerr<<"random               "<<random<<"\n";
+  //cerr<<"GENERATING A RAND VAL random            "<<random<<"\n";
+  strcpy(id,(char *) random);
+}
+
+bool isRecentID(string id, vector<string> recent)
+{
+//  cerr<<"size is "<<recent.size()<<"COMPARINGCOMPARINGCOMPARING\n"<<id<<"\n"<<"with \n";
+ for (int i = 0; i < (int)recent.size(); i++) cerr<<recent[i]<<"\n";
+  for (int i = 0; i < (int)recent.size(); i++)
+  {
+    //cerr<<recent[i]<<"\n";
+    //char test[SAY_ID_MAX];
+    //cpString(recent[i],test,sizeof test);
+    if (id ==recent[i]) return true;
+  }
+  return false;
 }
 
 void outputMSG(struct sockaddr_in host, struct sockaddr_in client,const char * packetmsg)
@@ -171,11 +211,7 @@ bool inChannel(string user, vector<string> channel)
   return false;
 }
 
-void cpString(const string& input, char *dst, size_t dst_size)
-{
-  strncpy(dst, input.c_str(),dst_size - 1);
-  dst[dst_size -1] = '\0';
-}
+
 
 void s2sJoin(int socket, const char * channel,sockaddr_in connection)
 {
@@ -203,21 +239,23 @@ void joinS2S(s2s_join * packet, map<string,struct channelcontents > * channels, 
   struct channelcontents cc;
   vector<string> joined_users;
   cc.usernames = joined_users;
-  cerr<<"THIS IS THE CLIENT SERVERS SIN_PORT "<<client.sin_port<<"\n";
+  //cerr<<"THIS IS THE CLIENT SERVERS SIN_PORT "<<client.sin_port<<"\n";
   for (int i = 0; i < (int)servers.size(); i++)
   {
+    cc.servers.push_back(servers[i]);
     if (client.sin_port != servers[i].server.sin_port )
     {
-      cc.servers.push_back(servers[i]);
+      outputWithChannel(host,cc.servers[i].server,"send S2S Join", packet->s2s_channel);
+      s2sJoin(socket,packet->s2s_channel,cc.servers[i].server);
     }
   }
   //cc.servers.erase(removeServerIndex(cc.servers, client));
   channels->insert(make_pair(packet->s2s_channel,cc));
-  for (int i = 0; i < (int)cc.servers.size(); i++)
-  {
-    outputWithChannel(host,cc.servers[i].server,"send S2S Join", packet->s2s_channel);
-    s2sJoin(socket,packet->s2s_channel,cc.servers[i].server);
-  }
+  // for (int i = 0; i < (int)cc.servers.size(); i++)
+  // {
+  //   outputWithChannel(host,cc.servers[i].server,"send S2S Join", packet->s2s_channel);
+  //   s2sJoin(socket,packet->s2s_channel,cc.servers[i].server);
+  // }
 }
 
 void join(request_join * packet,string user,map<string,struct channelcontents > *channels, vector<c_server> servers,sockaddr_in host,int socket)
@@ -262,14 +300,67 @@ void sendError(sockaddr_in connection, int socket,const char * msg)
   sendto(socket,&packet,sizeof packet, 0, (const sockaddr *)&connection, sizeof connection);
 }
 
-void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map<string,struct channelcontents > channels,int socket)
+void sayS2S(s2s_say *packet, map<string,struct sockaddr_in> users, map<string, struct channelcontents > *channels, int socket,sockaddr_in host, sockaddr_in client)
 {
+
+  //for all users in channel, parse packet and send to them
+  struct text_say send_packet;
+  send_packet.txt_type = TXT_SAY;
+  strcpy(send_packet.txt_channel,packet->s2s_channel);
+  strcpy(send_packet.txt_username, packet->s2s_username);
+  strcpy(send_packet.txt_text, packet->s2s_text);
+  for (map<string,struct channelcontents>::iterator it = channels->begin(); it!=channels->end(); it++)
+  {
+    if (it->first == packet->s2s_channel)
+    {
+      //this is the right channel, iterate through users to send the message multiple times
+      cerr<<"IDS\n\n\n";
+      // for (int i = 0; i < (int)it->second.ids.size();i++) cerr<<it->second.ids[i]<<"\n";
+      // if (isRecentID(it->second.ids[0],it->second.ids)) cerr<<"\nLooks like it's working right\n";
+      //check if ID matches recent list
+      if (isRecentID((string)packet->id,it->second.ids))
+      {
+         //if so return/leave
+         cerr<<"IM A MATCHED ID\n";
+         return;
+      }
+      for (int i = 0; i < (int)it->second.usernames.size(); i++)
+      {
+        string username = it->second.usernames[i];
+        sockaddr_in connection = getUserByName(users,username);
+        sendto(socket, &send_packet, sizeof send_packet, 0, (const sockaddr *)&connection, sizeof connection);
+
+      }
+      char id[SAY_ID_MAX];
+      strcpy(id,packet->id);
+      //add the unique id to the list of recently used ID's
+      it->second.ids.push_back((string) id);
+
+      //forward packet to other servers
+      for (int i = 0; i < (int) it->second.servers.size(); i++)
+      {
+        if (client.sin_port != it->second.servers[i].server.sin_port)
+        {
+          int err;
+          outputASay(host,it->second.servers[i].server,"send S2S Say", packet->s2s_username, packet->s2s_channel, packet->s2s_text);
+          err = sendto(socket,packet,sizeof *packet, 0, (const sockaddr *) &it->second.servers[i].server, sizeof it->second.servers[i].server);
+        }
+      }
+    }
+  }
+
+
+}
+
+void say(request_say *packet,string user,map<string,struct sockaddr_in> users,map<string,struct channelcontents > *channels,int socket,sockaddr_in host)
+{
+
   struct text_say send_packet;
   send_packet.txt_type = TXT_SAY;
   strcpy(send_packet.txt_channel,packet->req_channel);
   cpString(user,send_packet.txt_username,sizeof send_packet.txt_username);
   strcpy(send_packet.txt_text,packet->req_text);
-  for (map<string,struct channelcontents >::iterator it = channels.begin(); it!=channels.end(); it++)
+  for (map<string,struct channelcontents >::iterator it = channels->begin(); it!=channels->end(); it++)
   {
     if (it->first==packet->req_channel)
     {
@@ -280,8 +371,31 @@ void say(request_say *packet,string user,map<string,struct sockaddr_in> users,ma
         sockaddr_in connection= getUserByName(users,username);
         sendto(socket, &send_packet, sizeof send_packet, 0, (const sockaddr *)&connection,sizeof connection);
       }
+      //construct the s2s_say packet
+      struct s2s_say spacket;
+      spacket.req_type = 10;
+      char id[SAY_ID_MAX];
+      randomID(id);
+      strcpy(spacket.id,id);
+      cpString(user,spacket.s2s_username,sizeof spacket.s2s_username);
+      strcpy(spacket.s2s_channel,packet->req_channel);
+      strcpy(spacket.s2s_text, packet->req_text);
+
+      //add the unique id to the list of recently used id's
+      it->second.ids.push_back((string) id);
+      //send the packet to the adjacent servers
+      for (int i = 0; i < (int)it->second.servers.size(); i++)
+      {
+        int err;
+        cerr<<"UUID "<<sizeof spacket.id<<"\n";
+
+        outputASay(host,it->second.servers[i].server,"send S2S Say", spacket.s2s_username, spacket.s2s_channel, spacket.s2s_text);
+        err = sendto(socket,&spacket,sizeof spacket,0, (const sockaddr *) &it->second.servers[i].server, sizeof it->second.servers[i].server);
+        cerr<<"ERR NO "<<err<<"\n";
+      }
     }
   }
+  cerr<<"DONE WITH THE SAY\n";
 }
 
 void sendList(sockaddr_in connection, map<string,struct channelcontents > channels, int socket)
@@ -384,6 +498,7 @@ int main(int argc, char *argv[]) {
       string hacky_name;
 
     while (1) {
+      cerr<<"WHILE LOOP INTERATION\n";
       struct request u_packet[100];
       struct sockaddr_in client_addr;
 
@@ -391,7 +506,7 @@ int main(int argc, char *argv[]) {
       addrlen = sizeof(client_addr);
       //server running, wait for a packet to arrive
       recvfrom(my_socket,u_packet,100,0,(struct sockaddr *) &client_addr,&addrlen);
-      cerr<<"Received Clients port "<<client_addr.sin_port<<"\n";
+      //cerr<<"Received Clients port "<<client_addr.sin_port<<"\n";
       // if (u_packet->req_type > 7)
       // {
       //   if (secondpacket) {secondpacket = false;}
@@ -403,7 +518,7 @@ int main(int argc, char *argv[]) {
       //   if (secondpacket) {secondpacket = false; users.clear(); users.insert(make_pair(hacky_name,client_addr));}
       //   if (firstpacket) { firstpacket = false; secondpacket = true;hacky_name = ((request_login *)u_packet)->req_username;}
       // }
-      //cerr<"I RECEIVED A PACKET\n";
+      cerr<"I RECEIVED A PACKET\n";
       //fprintf(stderr,"I RECEIVED A PACKET");
       //output debugging whenever receiving message from client
         //[channel][user][message]
@@ -445,7 +560,13 @@ int main(int argc, char *argv[]) {
       {
         outputASay(my_server,client_addr,"recv Request Say", getUser(users,client_addr), ((request_say *)u_packet)->req_channel, ((request_say *)u_packet)->req_text);
         //deal with say request
-        say((request_say *) u_packet, getUser(users,client_addr), users,channels,my_socket);
+        say((request_say *) u_packet, getUser(users,client_addr), users,&channels,my_socket,my_server);
+      }
+      else if (u_packet->req_type == 10)
+      {
+        //deal with s2s say request
+        outputASay(my_server,client_addr,"recv S2S Say", (string)((s2s_say *)u_packet)->s2s_username,((s2s_say *)u_packet)->s2s_channel, ((s2s_say *)u_packet)->s2s_text);
+        sayS2S(((s2s_say *)u_packet), users,&channels,my_socket,my_server,client_addr );
       }
       else if ((u_packet->req_type == 5) &&  (loggedIn(client_addr,users)))
       {

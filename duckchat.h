@@ -2,7 +2,7 @@
 #define DUCKCHAT_H
 
 #define LOCALHOST "127.0.0.1"
-#define PACKET_MAX 132
+#define PACKET_MAX 200
 
 /* Path names to unix domain sockets should not be longer than this */
 #ifndef UNIX_PATH_MAX
@@ -20,6 +20,8 @@
 #define USERNAME_MAX 32
 #define CHANNEL_MAX 32
 #define SAY_MAX 64
+
+#define SAY_ID_MAX 8
 
 /* Define some types for designating request and text codes */
 typedef int request_t;
@@ -84,6 +86,24 @@ struct request_who {
         request_t req_type; /* = REQ_WHO */
         char req_channel[CHANNEL_MAX];
 } packed;
+
+struct s2s_join {
+        request_t req_type; /* = 8 */
+        char s2s_channel[CHANNEL_MAX];
+} packed;
+
+struct s2s_leave {
+        request_t req_type; /* = 9 */
+        char s2s_channel[CHANNEL_MAX];
+} packed;
+
+struct s2s_say {
+        request_t req_type; /* = 10*/
+        char id[SAY_ID_MAX];
+        char s2s_username[USERNAME_MAX];
+        char s2s_channel[CHANNEL_MAX];
+        char s2s_text[SAY_MAX];
+ } packed;
 
 struct request_keep_alive {
         request_t req_type; /* = REQ_KEEP_ALIVE */
